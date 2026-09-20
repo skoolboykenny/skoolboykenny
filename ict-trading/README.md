@@ -245,6 +245,37 @@ definition, not fitted.** They have never been checked against a hand marked
 chart, and tuning them on anything but real data would be fitting to noise.
 Re-tune them against `ict verify` before trusting any backtest.
 
+### Swings, and why generated data hides a real bug here
+
+A swing high is at least as high as the `n` candles before it and strictly
+higher than the `n` after. The asymmetry is deliberate: a run of candles
+sharing the same high is **one** swing, marked at its last candle, rather than
+none at all.
+
+Requiring a strictly lower neighbour on both sides looks tidier and fails on
+real feeds, which quote to a fixed number of decimals so adjacent candles share
+an exact high often. Measured on the same prices at different quantisations:
+
+```
+            feed    strict   plateaus   recovered
+      raw floats      6092       6092         0%
+     5dp EUR/USD      5619       6097         9%
+     3dp USD/JPY       336       1513       350%
+```
+
+On raw floats the two rules are identical, which is exactly why generated data
+cannot show this. On a three decimal feed, the way USD/JPY and tick sized
+futures such as NQ and ES quote, the strict rule finds a twentieth of the
+swings. Since the project record plans to trade NQ and ES, that matters.
+
+Equal highs are also the liquidity pattern ICT cares most about, so discarding
+them is the opposite of what the detector is for.
+
+**Worth checking on real data:** 25.8% of candles are swings at `n = 2`, and
+after the prominence filter 57% of consecutive swings share a kind rather than
+alternating high, low, high. Structure readings assume alternation, so if that
+holds on EUR/USD the sequence may need enforcing.
+
 ### What counts as structure
 
 `StructureConfig.prominence_lookback` (12) decides which swings are structure
