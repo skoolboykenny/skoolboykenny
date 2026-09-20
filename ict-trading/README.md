@@ -26,6 +26,20 @@ plotly.
 
 ## Getting data
 
+The project's own data collection step downloads EURUSD and GBPUSD 1 minute
+bid and ask candles from Dukascopy, from 2021 onward, and merges them into one
+Parquet file per instrument with mid prices and spread. See
+[`DATA.md`](DATA.md) for the source, the columns and how to rerun it:
+
+```bash
+python scripts/download_data.py --months 1   # check the feed is reachable
+python scripts/download_data.py              # the full range, resumable
+python scripts/build_parquet.py              # merge and report gaps
+```
+
+The readers below remain for loading a single instrument's candles from a
+vendor CSV by hand.
+
 Two vendors are supported. Neither needs an account for 1 minute history.
 
 **HistData** (the quickest start). Download "ASCII M1 bars" per month from
