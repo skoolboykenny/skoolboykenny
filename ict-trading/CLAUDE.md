@@ -181,13 +181,43 @@ days and bottom on 200, at +14.49R and then -94.32R, with nothing about the
 model changed. An ordering that does not survive a change of window is not an
 ordering.
 
+## Phase 4: the path to live
+
+Built ahead of the earlier gates because the data blocker made everything else
+theoretical, and because one OANDA integration clears it.
+
+`src/ict/data/oanda.py` is the v20 client: paged candle download with bid and
+ask together, the price stream, and the account and order endpoints. Credentials
+come from `OANDA_API_TOKEN`, `OANDA_ACCOUNT_ID` and `OANDA_ENVIRONMENT` and
+never from the repository. `ict fetch` writes one chunk per month so a download
+resumes, and drops incomplete candles on the way in.
+
+`src/ict/backtest/robustness.py` is gate 4. Parameter sensitivity moves one
+field at a time, one step either side, and reports the share of neighbours that
+stayed profitable; crossing every field would be a parameter search wearing a
+robustness test's clothes. Monte Carlo reshuffles trades for the drawdown
+distribution and resamples with replacement for a confidence interval on
+expectancy. `ict robustness` exits non-zero unless both halves pass.
+
+`src/ict/live/` is gates 5 and 6. The loop reuses the backtest's detectors,
+models and risk manager unchanged, so paper trading measures what was
+backtested. It holds back the forming candle, attaches every stop and target at
+fill time so a position is never naked, expires orders with their window,
+reconciles against the account before each decision, and halts finally on a
+stale stream, a drawdown past the guard or a losing run. `ict live` is a dry run
+unless `--execute` is passed, and refuses the live environment without
+`--i-understand`.
+
+The sequence, and what is still blocking, is in `docs/live.md`. Gate 1 remains
+the true blocker: it is manual labelling and no amount of code substitutes for
+it.
+
 ## Later phases (do not build yet)
 
 1. News module (calendar gate, directional and spike correction playbooks) and
    AI review layer.
-2. Broker integration (OANDA practice account first), dashboard, journal,
-   alerts.
-3. Live only after walk forward and paper trading gates pass.
+2. Dashboard, journal and alerts on top of the live loop.
+3. Live only after every gate in `docs/live.md` passes.
 
 ## Project record
 

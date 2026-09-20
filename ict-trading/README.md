@@ -30,6 +30,26 @@ pytest
 Python 3.11 or newer. The only dependencies are pandas, numpy, pyarrow and
 plotly.
 
+## Getting to real time trading
+
+[`docs/live.md`](docs/live.md) is the path from here to a live account, gate by
+gate. The short version: open a free OANDA practice account, export the token,
+and everything up to and including three months of paper trading runs with no
+money at risk.
+
+```bash
+export OANDA_API_TOKEN=...          # never in the repository
+export OANDA_ACCOUNT_ID=101-004-...
+export OANDA_ENVIRONMENT=practice
+
+ict fetch --start 2021-01-01 --out data/processed/eurusd_m1.parquet
+ict robustness data/processed/eurusd_m1.parquet   # gate 4
+ict live data/processed/eurusd_m1.parquet         # dry run; --execute to trade
+```
+
+`ict live` sends nothing unless `--execute` is passed, and refuses the live
+environment without `--i-understand` on top of that.
+
 ## Getting data
 
 The project's own data collection step downloads EURUSD and GBPUSD 1 minute
@@ -429,12 +449,14 @@ bias_candles = stack.as_of(now, "4h")
 src/ict/
   config.py          every tunable number
   analysis.py        runs the detectors in dependency order
-  cli.py             ingest · gaps · plot · sample · verify · backtest · rank · demo
-  data/              vendor CSV readers, cleaning, Parquet store
+  cli.py             ingest · fetch · gaps · plot · sample · verify
+                     backtest · rank · robustness · live · demo
+  data/              vendor CSV readers, OANDA client, cleaning, Parquet store
   timeframes/        New York sessions, resampling, the lookahead guard
   detectors/         one module per concept, each a pure function
   plotting/          annotated charts
   backtest/          engine, broker, costs, risk, the seven models, walk forward
+  live/              OANDA order adapter and the live loop
 tests/               hand-built candle sequences with known answers
 ```
 
