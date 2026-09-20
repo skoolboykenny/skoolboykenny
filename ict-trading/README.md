@@ -112,8 +112,18 @@ ict sample data/processed/eurusd_m1.parquet --count 100 --timeframe 15m \
 ```
 
 Days are chosen at random rather than picked, so the sample is not quietly
-drawn from days the detectors already handle. It writes one chart per day,
-`manifest.csv` with the detector's own counts, and a blank `labels.csv`.
+drawn from days the detectors already handle. It writes one chart per day and a
+blank `labels.csv`.
+
+**The charts carry no detector marks, deliberately.** Being shown the answers
+and then asked to mark the chart independently is not verification: you would
+anchor on what is already drawn, agreement would come out high, and a detector
+that is systematically wrong would pass the check that exists to fail it. Only
+the kill zone shading and session levels are kept, because both are read off
+the clock rather than inferred.
+
+Pass `--with-answers` to write the annotated charts and the detector's counts
+into a separate `answers/` folder, to review **after** you have finished.
 
 **2. Mark the charts by hand.** One row per concept you can see, into
 `labels.csv`. Times are New York wall clock, matching the chart axis:
