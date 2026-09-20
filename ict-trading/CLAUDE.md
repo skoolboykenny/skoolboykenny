@@ -122,6 +122,13 @@ lower prominence (6 against 12) because it breaks a short term swing rather
 than a major one; that setting is the least certain in the project and should
 be revisited first against hand labels.
 
+Swings allow plateaus: a run of equal highs is one swing at its last candle.
+The strict rule found 336 swings against 1,513 on data quantised to three
+decimals, the way USD/JPY and tick sized futures quote, and the two rules are
+identical on raw floats, so generated data cannot show this. Noted for real
+data: 57% of consecutive prominent swings share a kind rather than
+alternating.
+
 **Still true: the detectors have not passed the 90% gate and nothing has run on
 real data.** The report states this on every run unless `--verified` is passed.
 Do not act on a result until `ict verify` passes on real data.

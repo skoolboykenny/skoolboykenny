@@ -118,3 +118,82 @@ def test_n_controls_strictness():
 
     assert 13 in loose_highs
     assert 13 not in strict_highs
+
+
+def test_a_run_of_equal_highs_is_one_swing_at_its_last_candle():
+    """Real feeds quantise prices, so adjacent equal highs are common.
+
+    The strict rule discarded them entirely. Equal highs are also the
+    liquidity pattern ICT cares most about, so throwing them away is the
+    opposite of what the detector is for.
+    """
+    candles = make_candles(
+        [
+            (10, 11, 9, 10),
+            (10, 12, 9, 11),
+            (11, 15, 10, 14),  # the plateau starts
+            (14, 15, 13, 14),  # same high
+            (14, 15, 13, 14),  # same high again
+            (14, 13, 11, 12),
+            (12, 12, 10, 11),
+        ]
+    )
+    swings = find_swings(candles, SwingConfig(n=2))
+    highs = swings.loc[swings["kind"] == "high"]
+
+    assert len(highs) == 1, "a plateau is one swing, not three and not none"
+    assert highs.iloc[0]["price"] == 15
+    # Marked at the last candle of the run, which is when it is confirmable.
+    assert highs.iloc[0]["time"] == candles.index[4]
+
+
+def test_the_strict_rule_loses_the_plateau_entirely():
+    candles = make_candles(
+        [
+            (10, 11, 9, 10),
+            (10, 12, 9, 11),
+            (11, 15, 10, 14),
+            (14, 15, 13, 14),
+            (14, 15, 13, 14),
+            (14, 13, 11, 12),
+            (12, 12, 10, 11),
+        ]
+    )
+    strict = find_swings(candles, SwingConfig(n=2, allow_plateaus=False))
+    assert strict.loc[strict["kind"] == "high"].empty
+
+
+def test_a_flat_stretch_does_not_make_a_swing_on_every_candle():
+    # The failure the strict rule was guarding against. Still guarded.
+    candles = make_candles([(10, 12, 9, 11)] * 9)
+    swings = find_swings(candles, SwingConfig(n=2))
+    assert swings.empty
+
+
+def test_swings_survive_a_coarsely_quantised_feed():
+    """USD/JPY quotes to three decimals and futures quote in ticks.
+
+    On raw floats adjacent candles almost never share a high, so a strict
+    rule looks fine. Quantise the same prices and it collapses.
+    """
+    import numpy as np
+
+    rng = np.random.default_rng(4)
+    walk = 150.0 + np.cumsum(rng.normal(0, 0.01, 400))
+    rows = [
+        (p, p + 0.02, p - 0.02, p + 0.005) for p in walk
+    ]
+    raw = make_candles(rows)
+    coarse = raw.copy()
+    coarse[["open", "high", "low", "close"]] = coarse[
+        ["open", "high", "low", "close"]
+    ].round(1)
+
+    plateaus = len(find_swings(coarse, SwingConfig(n=2)))
+    strict = len(find_swings(coarse, SwingConfig(n=2, allow_plateaus=False)))
+    on_floats = len(find_swings(raw, SwingConfig(n=2)))
+
+    # The strict rule loses most of them once prices tie.
+    assert strict < on_floats * 0.6
+    # Allowing plateaus keeps the detector usable on that feed.
+    assert plateaus > strict * 1.5
