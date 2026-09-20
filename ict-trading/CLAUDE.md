@@ -10,7 +10,7 @@ later and may only reduce or cancel trades.
 Owner: Ryan Kenaope. Use UK English in all docs, comments and output. Do not
 use " - " as a dash in prose.
 
-## Current phase: Phase 1, data and detectors
+## Phase 1: data and detectors
 
 Goal: load 1 minute data, build the timeframe stack, and implement verified ICT
 detectors with chart plots. No strategy, no broker, no AI yet.
@@ -139,16 +139,51 @@ edge; 0.97 is the noise floor for a random walk after costs.
 real data.** The report states this on every run unless `--verified` is passed.
 Do not act on a result until `ict verify` passes on real data.
 
+## Phase 3: the remaining models and walk forward
+
+The six models the record lists beyond the Silver Bullet are encoded: the 2022
+mentorship model, optimal trade entry, Power of Three, the Judas swing, Turtle
+Soup and sweep to sweep. Each is a `BaseModel` subclass whose only job is
+`find_setup`. Window gating, order life, the minimum R filter and the entry
+geometry check are shared, so a difference between two models is a difference
+in the rule rather than in the plumbing.
+
+`src/ict/backtest/strategy.py` holds the shared `Context`: one pass of every
+detector over the whole series, reused by every model and every fold. Analysing
+is most of the cost, and the lookahead guard makes a shared analysis exactly
+equivalent to re-running the detectors per fold.
+
+`src/ict/backtest/walkforward.py` and `ict rank` tune on a rolling training
+window, test on the window after it, and pool only the test windows into the
+reported number. In sample results are kept solely to compute drift, in sample
+expectancy minus out of sample, which is the signature of a search fitting
+noise. Models are ranked on expectancy per trade in R, because profit factor
+flatters a model with three lucky trades and net profit rewards whichever model
+traded most. Empty folds are counted next to the fold total rather than
+dropped.
+
+Writing the tests found two real defects, both now fixed centrally:
+
+- A model could return a long whose stop sat above its own entry, when the gap
+  opened below the swept low. Risk being an absolute distance hid it. `_finish`
+  now insists on `stop < limit < target` for a long and the inverse for a
+  short.
+- Setups whose whole risk was narrower than the spread filled at or past their
+  own stop, booking the loss before price moved. The engine refuses them and
+  counts them under "stop inside cost", since a model never sees the spread and
+  cannot check this itself.
+
+The walk forward ranking on generated data is in `docs/walk-forward.md`. It
+orders the code, not the models: on a random walk there is nothing to find, and
+none of these detectors has passed the 90% gate.
+
 ## Later phases (do not build yet)
 
-2. Silver Bullet backtest with spread, commission and slippage. (In progress.)
-3. Remaining models: 2022 model, OTE, Power of Three, Judas swing, Turtle Soup,
-   sweep to sweep.
-4. News module (calendar gate, directional and spike correction playbooks) and
+1. News module (calendar gate, directional and spike correction playbooks) and
    AI review layer.
-5. Broker integration (OANDA practice account first), dashboard, journal,
+2. Broker integration (OANDA practice account first), dashboard, journal,
    alerts.
-6. Live only after walk forward and paper trading gates pass.
+3. Live only after walk forward and paper trading gates pass.
 
 ## Project record
 
