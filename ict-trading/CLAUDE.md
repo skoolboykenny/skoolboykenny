@@ -212,12 +212,47 @@ The sequence, and what is still blocking, is in `docs/live.md`. Gate 1 remains
 the true blocker: it is manual labelling and no amount of code substitutes for
 it.
 
+## Phase 5: news module and AI review layer
+
+`src/ict/news/` is the calendar, the gate and the two playbooks. The gate is a
+risk check, so it narrows the tradeable window before a model is asked rather
+than being something a model consults. It blocks entries and never exits: a
+position open when CPI lands keeps its stop with the broker. Surprises are
+scaled by each event's own history, using only earlier releases, because an
+unscaled surprise ranks every payroll release above every inflation release on
+quoting units alone. `NewsCostModel` widens the spread for the first sixty
+seconds; a news result produced without it should be thrown away.
+
+`src/ict/review/` is the AI layer. It may only skip a trade or shrink it, and
+that is enforced in the `Verdict` type rather than in the prompt, because
+headlines are untrusted text going into a language model and a prompt is not a
+boundary. The worst a successful injection can do is skip a trade. An
+unparseable reply becomes a take, since a parsing failure is the reviewer's
+fault and the strategy should not pay for it. `RuleReviewer` is the default and
+needs no API.
+
+The audit is the part that matters, and it needed real work to be more than a
+comment. The engine runs a shadow broker so a blocked trade's R can be known,
+and the shadow carries its own risk manager: blocking a trade means the loss
+never happens, so the session limits never trip and the strategy sees setups it
+would never have reached. Without that the counterfactual read -277R against an
+unreviewed -26R on the same data. A blocked setup also occupies the engine for
+the order's life rather than being re-reviewed every candle, which was turning
+one refusal into hundreds of decisions and, against a real API, hundreds of
+calls.
+
+`ict news`, `--calendar` and `--review` on backtest and live, and
+`ict review-audit`, which exits non-zero when the layer should come off.
+`docs/news.md` covers it.
+
+Both are filters on a strategy that has not passed gate 1. A filter on an
+unverified strategy is a filter on a bug. The review layer's honest default is
+off until its own audit says otherwise on real data.
+
 ## Later phases (do not build yet)
 
-1. News module (calendar gate, directional and spike correction playbooks) and
-   AI review layer.
-2. Dashboard, journal and alerts on top of the live loop.
-3. Live only after every gate in `docs/live.md` passes.
+1. Dashboard, journal and alerts on top of the live loop.
+2. Live only after every gate in `docs/live.md` passes.
 
 ## Project record
 
