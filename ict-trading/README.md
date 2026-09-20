@@ -50,6 +50,26 @@ ict live data/processed/eurusd_m1.parquet         # dry run; --execute to trade
 `ict live` sends nothing unless `--execute` is passed, and refuses the live
 environment without `--i-understand` on top of that.
 
+## News and the AI review layer
+
+[`docs/news.md`](docs/news.md). Two things that can stop a trade, and neither
+can start one.
+
+```bash
+ict news calendar.csv --parquet data/processed/eurusd_m1.parquet
+ict backtest data/processed/eurusd_m1.parquet --calendar calendar.csv \
+    --review rules --review-journal decisions.csv
+ict review-audit decisions.csv
+```
+
+The news gate blocks entries fifteen minutes either side of a high impact
+release. It never touches exits: a position open when CPI lands keeps its stop.
+
+The review layer may only skip a trade or shrink it, enforced in the `Verdict`
+type rather than in a prompt, because headlines are untrusted input going into
+a language model. `ict review-audit` applies the record's own rule: if the
+trades the layer blocked would have won more than they lost, switch it off.
+
 ## Getting data
 
 The project's own data collection step downloads EURUSD and GBPUSD 1 minute
@@ -449,14 +469,16 @@ bias_candles = stack.as_of(now, "4h")
 src/ict/
   config.py          every tunable number
   analysis.py        runs the detectors in dependency order
-  cli.py             ingest · fetch · gaps · plot · sample · verify
-                     backtest · rank · robustness · live · demo
+  cli.py             ingest · fetch · gaps · plot · sample · verify · backtest
+                     rank · news · review-audit · robustness · live · demo
   data/              vendor CSV readers, OANDA client, cleaning, Parquet store
   timeframes/        New York sessions, resampling, the lookahead guard
   detectors/         one module per concept, each a pure function
   plotting/          annotated charts
   backtest/          engine, broker, costs, risk, the seven models, walk forward
   live/              OANDA order adapter and the live loop
+  news/              calendar, the entry gate, and the two news playbooks
+  review/            the AI review layer and the audit that polices it
 tests/               hand-built candle sequences with known answers
 ```
 

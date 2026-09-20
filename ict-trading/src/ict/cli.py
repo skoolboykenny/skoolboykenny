@@ -357,6 +357,19 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         print("no candles in that range", file=sys.stderr)
         return 1
 
+    from .review import Journal
+
+    gate = _news_gate(args)
+    reviewer = _reviewer(args)
+    decisions = Journal() if reviewer is not None else None
+
+    if gate is not None:
+        from .news import gated_minutes
+
+        share = gated_minutes(gate, candles.index)
+        print(f"news gate: {len(gate.blackouts)} windows, {share:.1%} of candles "
+              f"blocked\n")
+
     result = run_backtest(
         candles,
         costs=CostModel(
@@ -367,8 +380,14 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         risk=RiskConfig(risk_per_trade=args.risk),
         strategy=_configured_model(args),
         starting_equity=args.equity,
+        news_gate=gate,
+        reviewer=reviewer,
+        journal=decisions,
     )
     metrics = measure_backtest(result)
+    if decisions is not None and args.review_journal:
+        path = decisions.write_csv(args.review_journal)
+        print(f"{len(decisions.decisions)} review decisions written to {path}\n")
     print(
         backtest_report(
             result,
@@ -509,6 +528,12 @@ def cmd_live(args: argparse.Namespace) -> int:
         return 1
     history = history.tail(args.history_candles)
 
+    from .review import Journal
+
+    gate = _news_gate(args)
+    reviewer = _reviewer(args)
+    decisions = Journal() if reviewer is not None else None
+
     broker = LiveBroker(client, args.instrument)
     runner = LiveRunner(
         broker=broker,
@@ -520,6 +545,9 @@ def cmd_live(args: argparse.Namespace) -> int:
             max_drawdown=args.max_drawdown,
             max_consecutive_losses=args.max_consecutive_losses,
         ),
+        news_gate=gate,
+        reviewer=reviewer,
+        journal=decisions,
         dry_run=not args.execute,
     )
 
@@ -532,13 +560,135 @@ def cmd_live(args: argparse.Namespace) -> int:
         f"{args.max_consecutive_losses} losses in a row\n"
     )
 
+    if gate is not None:
+        print(gate.summary() + "\n")
+    else:
+        print("No calendar loaded, so no news gate is active.\n")
+    if reviewer is not None:
+        print(f"review layer: {args.review}. It may only skip or shrink a trade.\n")
+
     halt = runner.run()
+    if decisions is not None and args.review_journal:
+        path = decisions.write_csv(args.review_journal)
+        print(f"\n{len(decisions.decisions)} review decisions written to {path}")
+        print("Score them with `ict review-audit` once the outcomes are known.")
     if halt:
         print(f"\n{halt}", file=sys.stderr)
         print("A halt is final. Check the account by hand before restarting.",
               file=sys.stderr)
         return 1
     return 0
+
+
+def _news_gate(args: argparse.Namespace):
+    """Build the news gate from a calendar file, or nothing if none was given."""
+    from .news import NewsGate, read_calendar
+
+    if not getattr(args, "calendar", None):
+        return None
+    frame = read_calendar(
+        args.calendar, timezone=args.calendar_timezone
+    )
+    return NewsGate(
+        frame,
+        instrument=getattr(args, "instrument", "EUR_USD"),
+        minutes_before=args.blackout_minutes,
+        minutes_after=args.blackout_minutes,
+        block_fomc_day=getattr(args, "block_fomc_day", False),
+    )
+
+
+def _reviewer(args: argparse.Namespace):
+    """Build the review layer named on the command line."""
+    from .review import AlwaysTake, ClaudeReviewer, RuleReviewer
+
+    choice = getattr(args, "review", "off")
+    if choice in (None, "off"):
+        return None
+    if choice == "rules":
+        return RuleReviewer()
+    if choice == "claude":
+        return ClaudeReviewer()
+    return AlwaysTake()
+
+
+def cmd_news(args: argparse.Namespace) -> int:
+    """Show what a calendar would gate, before it gates anything."""
+    from .news import NewsGate, events, read_calendar, scaled_surprise
+
+    frame = read_calendar(args.calendar, timezone=args.calendar_timezone)
+    if frame.empty:
+        print("no events read from that file", file=sys.stderr)
+        return 1
+
+    print(f"{len(frame):,} events, {frame['time'].min()} to {frame['time'].max()}")
+    counts = frame["impact"].value_counts()
+    for level in ("high", "medium", "low"):
+        print(f"  {level:<7}{int(counts.get(level, 0)):>6}")
+
+    gate = NewsGate(
+        frame,
+        instrument=args.instrument,
+        minutes_before=args.blackout_minutes,
+        minutes_after=args.blackout_minutes,
+        block_fomc_day=args.block_fomc_day,
+    )
+    print()
+    print(gate.summary())
+
+    if args.parquet:
+        from .news import gated_minutes
+
+        candles = read_parquet(args.parquet, side="mid")
+        share = gated_minutes(gate, candles.index)
+        print(f"\nthe gate blocks {share:.1%} of the {len(candles):,} candles in "
+              f"{Path(args.parquet).name}")
+        if share > 0.2:
+            print("That is a large share. A gate this wide is a different "
+                  "strategy, not a filter, and results are no longer\n"
+                  "comparable with an ungated run.")
+
+    tradeable = [e for e in events(frame) if e.actual is not None]
+    if tradeable:
+        surprises = scaled_surprise(frame).dropna()
+        print(f"\n{len(tradeable):,} events have an actual figure; "
+              f"{len(surprises):,} have enough history to scale a surprise")
+    return 0
+
+
+def cmd_review_audit(args: argparse.Namespace) -> int:
+    """Score a decision journal and say whether the layer should stay on."""
+    from .review import Journal, audit
+    from .review.audit import Decision
+
+    frame = pd.read_csv(args.journal)
+    journal = Journal()
+    for row in frame.itertuples():
+        journal.decisions.append(
+            Decision(
+                at=pd.Timestamp(row.at),
+                instrument=str(getattr(row, "instrument", "")),
+                model=str(getattr(row, "model", "")),
+                direction=str(getattr(row, "direction", "")),
+                entry=float(getattr(row, "entry", 0.0) or 0.0),
+                stop=float(getattr(row, "stop", 0.0) or 0.0),
+                target=float(getattr(row, "target", 0.0) or 0.0),
+                reward_to_risk=float(getattr(row, "reward_to_risk", 0.0) or 0.0),
+                action=str(row.action),
+                size_multiple=float(row.size_multiple),
+                reason=str(getattr(row, "reason", "")),
+                reviewer=str(getattr(row, "reviewer", "")),
+                outcome_r=(
+                    None if pd.isna(getattr(row, "outcome_r", None))
+                    else float(row.outcome_r)
+                ),
+            )
+        )
+
+    result = audit(journal)
+    print(result.summary())
+    # Non-zero when the layer should come off, so this can gate a build.
+    return 1 if (result.has_enough_evidence and result.should_switch_off) else 0
 
 
 def cmd_demo(args: argparse.Namespace) -> int:
@@ -661,6 +811,18 @@ def build_parser() -> argparse.ArgumentParser:
     backtest.add_argument("--slippage", type=float, default=0.00002)
     backtest.add_argument("--commission", type=float, default=0.0)
     backtest.add_argument("--journal", default=None, help="write trades to CSV")
+    backtest.add_argument("--calendar", default=None, help="calendar CSV, enables the news gate")
+    backtest.add_argument("--calendar-timezone", default=MARKET_TZ)
+    backtest.add_argument("--blackout-minutes", type=int, default=15)
+    backtest.add_argument("--block-fomc-day", action="store_true")
+    backtest.add_argument(
+        "--review", default="off", choices=["off", "rules", "claude"],
+        help="the AI review layer; it may only skip or shrink a trade",
+    )
+    backtest.add_argument(
+        "--review-journal", default=None,
+        help="write every review decision, including the skips, to CSV",
+    )
     backtest.add_argument(
         "--combinations-tried",
         type=int,
@@ -689,6 +851,21 @@ def build_parser() -> argparse.ArgumentParser:
     rank.add_argument("--out", default=None, help="write the ranking to CSV")
     rank.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
     rank.set_defaults(func=cmd_rank)
+
+    news = sub.add_parser("news", help="show what a calendar would gate")
+    news.add_argument("calendar", help="calendar CSV export")
+    news.add_argument("--parquet", default=None, help="score the gate against a series")
+    news.add_argument("--instrument", default="EUR_USD")
+    news.add_argument("--calendar-timezone", default=MARKET_TZ)
+    news.add_argument("--blackout-minutes", type=int, default=15)
+    news.add_argument("--block-fomc-day", action="store_true")
+    news.set_defaults(func=cmd_news)
+
+    audit_parser = sub.add_parser(
+        "review-audit", help="score a review journal and say whether to keep the layer"
+    )
+    audit_parser.add_argument("journal", help="decisions CSV written by the journal")
+    audit_parser.set_defaults(func=cmd_review_audit)
 
     robust = sub.add_parser(
         "robustness", help="gate 4: parameter sensitivity and Monte Carlo"
@@ -721,6 +898,18 @@ def build_parser() -> argparse.ArgumentParser:
     live.add_argument("--max-drawdown", type=float, default=0.15)
     live.add_argument("--max-consecutive-losses", type=int, default=8)
     live.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
+    live.add_argument("--calendar", default=None, help="calendar CSV, enables the news gate")
+    live.add_argument("--calendar-timezone", default=MARKET_TZ)
+    live.add_argument("--blackout-minutes", type=int, default=15)
+    live.add_argument("--block-fomc-day", action="store_true")
+    live.add_argument(
+        "--review", default="off", choices=["off", "rules", "claude"],
+        help="the AI review layer; it may only skip or shrink a trade",
+    )
+    live.add_argument(
+        "--review-journal", default="review-decisions.csv",
+        help="where every review decision is written, skips included",
+    )
     live.add_argument(
         "--execute", action="store_true", help="actually send orders"
     )
