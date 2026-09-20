@@ -216,14 +216,34 @@ the market.
 | Concept | Definition in code |
 | --- | --- |
 | Swing high / low | High (low) strictly beyond the `n` candles either side, `n = 2` |
-| Liquidity pool | Unswept swing; swings within a tolerance of ATR cluster as equal highs/lows |
-| Liquidity sweep | Wick beyond a pool, close back inside within `K` candles |
+| Liquidity pool | Unswept swing that is the extreme of the candles before it; swings within a tolerance of ATR cluster as equal highs/lows |
+| Liquidity sweep | Wick a minimum distance beyond a pool that has stood a minimum time, close back inside within `K` candles |
 | Break of structure | Close beyond the last confirmed swing, in the trend direction |
 | Market structure shift | After a sweep, a displaced close beyond the last opposing swing |
 | Displacement | Body at least `X` times prior ATR(14) **and** most of the candle's range |
 | Fair value gap | Candle 1 high below candle 3 low (inverse for bearish), with mitigation and inversion tracked |
 | Order block | Last opposing candle before a displacement leg that breaks structure, with its 50% mean threshold |
 | Session levels | Asian high/low, previous day and week high/low, midnight open |
+
+### What counts as liquidity worth sweeping
+
+Three filters in `LiquidityConfig` decide this, and they matter more than any
+other parameter in the project. Without them every two bar fractal becomes a
+pool and every wick past it becomes a sweep, which fires about ten times a day
+on a 15 minute chart: far more often than the concept describes, and enough
+false setups to bury a real edge.
+
+| Filter | Default | What it rules out |
+| --- | --- | --- |
+| `prominence_lookback` | 12 | Swings that are not the extreme of the stretch before them. A fractal inside a larger range is not a level anything rests above. |
+| `min_pool_age_candles` | 4 | Levels swept almost as soon as they form. Stops need time to accumulate behind a level. |
+| `min_penetration_atr` | 0.10 | Wicks that brush the level rather than run the stops behind it. |
+
+On synthetic data these take the sweep rate from 13.5 a day to 4.3, with
+prominence doing most of the work. **The defaults are argued from the
+definition, not fitted.** They have never been checked against a hand marked
+chart, and tuning them on anything but real data would be fitting to noise.
+Re-tune them against `ict verify` before trusting any backtest.
 
 Every threshold lives in `src/ict/config.py`. There are no magic numbers in
 detector code, so a later phase can sweep parameters by building a modified
