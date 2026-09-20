@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Market data and generated output are never committed: the files are large,
+# vendor licensed, and reproducible from the ingest command.
+data/
+charts/
+verification/
+*.parquet
