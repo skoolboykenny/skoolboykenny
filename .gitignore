@@ -7,9 +7,15 @@ venv/
 
 # Market data and generated output are never committed: the files are large,
 # vendor licensed, and reproducible from the ingest command.
-data/
-charts/
-verification/
+#
+# Anchored with leading slashes. An unanchored `data/` matches a directory of
+# that name at any depth, which silently excluded `src/ict/data/` and kept the
+# whole loader package out of the repository from Phase 1 until it was noticed
+# in Phase 4. A clone did not import.
+/data/
+/ict-trading/data/
+/charts/
+/verification/
 *.parquet
 .dukascopy-cache/
 node_modules/
