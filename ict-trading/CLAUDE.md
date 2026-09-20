@@ -10,7 +10,7 @@ later and may only reduce or cancel trades.
 Owner: Ryan Kenaope. Use UK English in all docs, comments and output. Do not
 use " - " as a dash in prose.
 
-## Current phase: Phase 1, data and detectors
+## Phase 1: data and detectors
 
 Goal: load 1 minute data, build the timeframe stack, and implement verified ICT
 detectors with chart plots. No strategy, no broker, no AI yet.
@@ -139,16 +139,85 @@ edge; 0.97 is the noise floor for a random walk after costs.
 real data.** The report states this on every run unless `--verified` is passed.
 Do not act on a result until `ict verify` passes on real data.
 
+## Phase 3: the remaining models and walk forward
+
+The six models the record lists beyond the Silver Bullet are encoded: the 2022
+mentorship model, optimal trade entry, Power of Three, the Judas swing, Turtle
+Soup and sweep to sweep. Each is a `BaseModel` subclass whose only job is
+`find_setup`. Window gating, order life, the minimum R filter and the entry
+geometry check are shared, so a difference between two models is a difference
+in the rule rather than in the plumbing.
+
+`src/ict/backtest/strategy.py` holds the shared `Context`: one pass of every
+detector over the whole series, reused by every model and every fold. Analysing
+is most of the cost, and the lookahead guard makes a shared analysis exactly
+equivalent to re-running the detectors per fold.
+
+`src/ict/backtest/walkforward.py` and `ict rank` tune on a rolling training
+window, test on the window after it, and pool only the test windows into the
+reported number. In sample results are kept solely to compute drift, in sample
+expectancy minus out of sample, which is the signature of a search fitting
+noise. Models are ranked on expectancy per trade in R, because profit factor
+flatters a model with three lucky trades and net profit rewards whichever model
+traded most. Empty folds are counted next to the fold total rather than
+dropped.
+
+Writing the tests found two real defects, both now fixed centrally:
+
+- A model could return a long whose stop sat above its own entry, when the gap
+  opened below the swept low. Risk being an absolute distance hid it. `_finish`
+  now insists on `stop < limit < target` for a long and the inverse for a
+  short.
+- Setups whose whole risk was narrower than the spread filled at or past their
+  own stop, booking the loss before price moved. The engine refuses them and
+  counts them under "stop inside cost", since a model never sees the spread and
+  cannot check this itself.
+
+The walk forward ranking on generated data is in `docs/walk-forward.md`. It
+orders the code, not the models: on a random walk there is nothing to find, and
+none of these detectors has passed the 90% gate. The clearest evidence of that
+is in the document itself. Turtle soup came top of the rows that traded on 120
+days and bottom on 200, at +14.49R and then -94.32R, with nothing about the
+model changed. An ordering that does not survive a change of window is not an
+ordering.
+
+## Phase 4: the path to live
+
+Built ahead of the earlier gates because the data blocker made everything else
+theoretical, and because one OANDA integration clears it.
+
+`src/ict/data/oanda.py` is the v20 client: paged candle download with bid and
+ask together, the price stream, and the account and order endpoints. Credentials
+come from `OANDA_API_TOKEN`, `OANDA_ACCOUNT_ID` and `OANDA_ENVIRONMENT` and
+never from the repository. `ict fetch` writes one chunk per month so a download
+resumes, and drops incomplete candles on the way in.
+
+`src/ict/backtest/robustness.py` is gate 4. Parameter sensitivity moves one
+field at a time, one step either side, and reports the share of neighbours that
+stayed profitable; crossing every field would be a parameter search wearing a
+robustness test's clothes. Monte Carlo reshuffles trades for the drawdown
+distribution and resamples with replacement for a confidence interval on
+expectancy. `ict robustness` exits non-zero unless both halves pass.
+
+`src/ict/live/` is gates 5 and 6. The loop reuses the backtest's detectors,
+models and risk manager unchanged, so paper trading measures what was
+backtested. It holds back the forming candle, attaches every stop and target at
+fill time so a position is never naked, expires orders with their window,
+reconciles against the account before each decision, and halts finally on a
+stale stream, a drawdown past the guard or a losing run. `ict live` is a dry run
+unless `--execute` is passed, and refuses the live environment without
+`--i-understand`.
+
+The sequence, and what is still blocking, is in `docs/live.md`. Gate 1 remains
+the true blocker: it is manual labelling and no amount of code substitutes for
+it.
+
 ## Later phases (do not build yet)
 
-2. Silver Bullet backtest with spread, commission and slippage. (In progress.)
-3. Remaining models: 2022 model, OTE, Power of Three, Judas swing, Turtle Soup,
-   sweep to sweep.
-4. News module (calendar gate, directional and spike correction playbooks) and
+1. News module (calendar gate, directional and spike correction playbooks) and
    AI review layer.
-5. Broker integration (OANDA practice account first), dashboard, journal,
-   alerts.
-6. Live only after walk forward and paper trading gates pass.
+2. Dashboard, journal and alerts on top of the live loop.
+3. Live only after every gate in `docs/live.md` passes.
 
 ## Project record
 

@@ -1,0 +1,30 @@
+# Credentials. The OANDA token must never reach a commit: if one does, revoke
+# it in the dashboard immediately, because rewriting history does not un-leak
+# a secret that has already been pushed.
+.env
+.env.*
+!.env.example
+*.token
+/secrets/
+
+# Market data. Large, regenerable with `ict fetch`, and not ours to publish.
+# Anchored with a leading slash: an unanchored `data/` also matches
+# `src/ict/data/`, which would quietly stop tracking the loader package.
+/data/
+*.parquet
+
+# Outputs: charts, journals, labelling runs, walk forward pickles.
+/labels/
+journal*.csv
+*.html
+!docs/**/*.html
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+build/
+dist/

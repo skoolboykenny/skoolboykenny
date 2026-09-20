@@ -13,6 +13,7 @@ and walking the other twenty one is wasted work.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -20,11 +21,12 @@ import pandas as pd
 from ..analysis import analyse
 from ..config import Config, MARKET_TZ
 from ..timeframes.resample import resample
-from ..timeframes.sessions import is_silver_bullet, market_date
-from .broker import Broker, Trade
+from ..timeframes.sessions import market_date
+from .broker import Broker, Order, Trade
 from .costs import CostModel
 from .risk import RiskConfig, RiskManager
-from .silver_bullet import SilverBullet, SilverBulletConfig
+from .models import MODELS, BaseModel, ModelConfig, SilverBulletModel
+from .strategy import Context, build_context
 
 
 @dataclass
@@ -87,16 +89,25 @@ class BacktestResult:
 
 def run(
     candles: pd.DataFrame,
+    strategy: BaseModel | str | Callable[[Context], BaseModel] | None = None,
     costs: CostModel | None = None,
     risk: RiskConfig | None = None,
-    strategy_config: SilverBulletConfig | None = None,
+    strategy_config: ModelConfig | None = None,
     detector_config: Config | None = None,
     starting_equity: float = 10_000.0,
+    context: Context | None = None,
 ) -> BacktestResult:
-    """Run the Silver Bullet over ``candles`` and return what happened."""
+    """Run one model over ``candles`` and return what happened.
+
+    ``strategy`` is a model instance, a name from
+    :data:`~ict.backtest.models.MODELS`, or None for the Silver Bullet.
+
+    ``context`` lets a caller analyse once and run many models or many folds
+    over the same candles. Analysing is most of the cost, so a walk forward
+    that rebuilt it per fold would spend all its time in the detectors.
+    """
     costs = costs or CostModel()
     risk = risk or RiskConfig()
-    strategy_config = strategy_config or SilverBulletConfig()
 
     if candles.empty:
         return BacktestResult(
@@ -108,12 +119,18 @@ def run(
             days=0,
         )
 
-    entry_analysis = analyse(candles, timeframe="1m", config=detector_config)
-    draw_frame = resample(candles, strategy_config.draw_timeframe)
-    draw_analysis = analyse(
-        draw_frame, timeframe=strategy_config.draw_timeframe, config=detector_config
-    )
-    strategy = SilverBullet(entry_analysis, draw_analysis, strategy_config)
+    if context is None:
+        context = build_context(candles, detector_config=detector_config)
+
+    if isinstance(strategy, BaseModel):
+        model = strategy
+    elif callable(strategy) and not isinstance(strategy, str):
+        # A factory, so a caller can configure a model without having built
+        # the context itself.
+        model = strategy(context)
+    else:
+        chosen = MODELS[strategy] if strategy else SilverBulletModel
+        model = chosen(context, strategy_config)
 
     broker = Broker(costs=costs)
     manager = RiskManager(config=risk, starting_equity=starting_equity)
@@ -122,7 +139,7 @@ def run(
         float(candles["spread"].median()) if "spread" in candles.columns else 0.0
     )
 
-    tradeable = is_silver_bullet(candles.index).to_numpy()
+    tradeable = model.tradeable_mask(candles.index)
     days = market_date(candles.index).to_numpy()
     weeks = candles.index.tz_convert(MARKET_TZ).isocalendar().week.to_numpy()
 
@@ -171,14 +188,35 @@ def run(
             )
             continue
 
-        setup = strategy.find_setup(stamp, candle)
+        setup = model.find_setup(stamp, candle)
         if setup is None:
             continue
 
-        size = manager.size_for(abs(setup.limit - setup.stop))
+        # A stop closer to entry than the cost of getting in is not a trade:
+        # the fill lands at or past it, so the loss is booked before price
+        # moves. Cheap to spot here and impossible for a model to spot, since
+        # the model never sees the spread.
+        if setup.risk <= spread + costs.slippage:
+            manager.blocked["stop inside cost"] = (
+                manager.blocked.get("stop inside cost", 0) + 1
+            )
+            continue
+
+        size = manager.size_for(setup.risk)
         if size <= 0:
             continue
-        broker.place(strategy.to_order(stamp, setup, size))
+        broker.place(
+            Order(
+                placed_at=stamp,
+                direction=setup.direction,
+                limit=setup.limit,
+                stop=setup.stop,
+                target=setup.target,
+                size=size,
+                expires_at=setup.expires_at or (stamp + model.order_life()),
+                reason=setup.reason,
+            )
+        )
 
     # Nothing is carried past the end of the data.
     if not broker.is_idle:
@@ -201,13 +239,13 @@ def run(
         blocked=dict(manager.blocked),
         pauses=pauses,
         parameters={
+            "model": model.name,
             "risk_per_trade": risk.risk_per_trade,
             "max_trades_per_day": risk.max_trades_per_day,
-            "minimum_r": strategy_config.minimum_r,
-            "stop_buffer_atr": strategy_config.stop_buffer_atr,
-            "order_life_minutes": strategy_config.order_life_minutes,
-            "draw_timeframe": strategy_config.draw_timeframe,
-            "windows": list(strategy_config.windows),
+            "minimum_r": model.config.minimum_r,
+            "stop_buffer": model.config.stop_buffer,
+            "order_life_minutes": model.config.order_life_minutes,
+            "windows": list(model.config.windows),
             "fallback_spread": costs.fallback_spread,
             "slippage": costs.slippage,
             "commission": costs.commission,
