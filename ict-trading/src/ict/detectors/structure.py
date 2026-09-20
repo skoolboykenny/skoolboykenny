@@ -112,6 +112,8 @@ def find_market_structure_shifts(
         return _empty(MSS_COLUMNS)
 
     displaces = displacement_mask(candles, displacement).to_numpy()
+    # Running total, so "did anything in this leg displace" is two lookups.
+    displaced_by = np.concatenate([[0], np.cumsum(displaces)])
     closes = candles["close"].to_numpy()
     index = candles.index
 
@@ -149,7 +151,21 @@ def find_market_structure_shifts(
 
         segment = closes[begin:end]
         broken = segment > level if direction == "up" else segment < level
-        hits = np.flatnonzero(broken & displaces[begin:end])
+
+        if config.displacement_in_leg:
+            # The leg runs from the sweep to the candle that breaks. It counts
+            # if anything in it displaced, not only the breaking candle.
+            candidates = begin + np.flatnonzero(broken)
+            leg_start = int(start)
+            hits = [
+                i
+                for i in candidates
+                if displaced_by[i + 1] - displaced_by[leg_start] > 0
+            ]
+            hits = np.array(hits, dtype=int) - begin
+        else:
+            hits = np.flatnonzero(broken & displaces[begin:end])
+
         if not len(hits):
             continue
 

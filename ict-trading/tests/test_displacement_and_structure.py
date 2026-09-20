@@ -178,3 +178,69 @@ def test_shift_must_follow_the_sweep_within_the_lookback():
     )
 
     assert shifts.empty
+
+
+def test_displacement_may_come_from_the_leg_not_only_the_breaking_candle():
+    """A three candle impulse is still a displacement leg.
+
+    The big candle does the work and the next one closes beyond the swing.
+    Requiring the breaking candle to be the displacing one rejects a textbook
+    shift, so ICT's "displacement leg that breaks structure" is read as the
+    leg, not the single candle.
+    """
+    rows = (
+        _quiet(16)
+        + [
+            (100.0, 100.2, 99.8, 100.0),
+            (100.0, 101.5, 99.9, 101.2),  # swing high at 101.5
+            (101.2, 101.0, 100.4, 100.6),
+            (100.6, 100.8, 100.2, 100.4),  # confirmed
+            (100.4, 100.6, 99.0, 99.2),  # swing low at 99.0
+            (99.2, 99.8, 99.1, 99.6),
+            (99.6, 99.9, 99.3, 99.7),  # confirmed
+            (99.7, 99.9, 98.5, 99.7),  # the sweep
+            (99.7, 101.4, 99.6, 101.3),  # the displacement, stops under 101.5
+            (101.3, 101.9, 101.2, 101.8),  # small candle closes beyond it
+        ]
+    )
+    candles = make_candles(rows)
+    sweeps = find_sweeps(candles, config=_mechanics())
+
+    as_leg = find_market_structure_shifts(
+        candles, sweeps=sweeps, config=StructureConfig(displacement_in_leg=True)
+    )
+    single_candle = find_market_structure_shifts(
+        candles, sweeps=sweeps, config=StructureConfig(displacement_in_leg=False)
+    )
+
+    assert not as_leg.empty, "the leg displaced and broke structure"
+    assert single_candle.empty, "the breaking candle alone did not displace"
+    assert as_leg.iloc[0]["direction"] == "up"
+
+
+def test_a_leg_with_no_displacement_anywhere_is_still_rejected():
+    # The same shape, but every candle is small: drift, not a shift.
+    rows = (
+        _quiet(16)
+        + [
+            (100.0, 100.2, 99.8, 100.0),
+            (100.0, 101.5, 99.9, 101.2),
+            (101.2, 101.0, 100.4, 100.6),
+            (100.6, 100.8, 100.2, 100.4),
+            (100.4, 100.6, 99.0, 99.2),
+            (99.2, 99.8, 99.1, 99.6),
+            (99.6, 99.9, 99.3, 99.7),
+            (99.7, 99.9, 98.5, 99.7),  # the sweep
+            (99.7, 100.3, 99.6, 100.2),
+            (100.2, 100.8, 100.1, 100.7),
+            (100.7, 101.3, 100.6, 101.2),
+            (101.2, 101.8, 101.1, 101.7),  # creeps beyond 101.5
+        ]
+    )
+    candles = make_candles(rows)
+    sweeps = find_sweeps(candles, config=_mechanics())
+
+    shifts = find_market_structure_shifts(
+        candles, sweeps=sweeps, config=StructureConfig(displacement_in_leg=True)
+    )
+    assert shifts.empty
