@@ -11,3 +11,5 @@ data/
 charts/
 verification/
 *.parquet
+.dukascopy-cache/
+node_modules/
