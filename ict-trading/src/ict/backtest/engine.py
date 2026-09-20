@@ -29,6 +29,37 @@ from .models import MODELS, BaseModel, ModelConfig, SilverBulletModel
 from .strategy import Context, build_context
 
 
+def _review(reviewer, journal, setup, stamp, model, manager):
+    """Ask the review layer about one setup, and record what it said.
+
+    Built here rather than in the loop so the engine stays readable, and so the
+    request carries the same structured fields the live path sends. Never a
+    chart: the layer sees numbers or nothing.
+    """
+    from ..review import ReviewRequest
+
+    request = ReviewRequest(
+        instrument="",
+        at=stamp,
+        direction=setup.direction,
+        entry=setup.limit,
+        stop=setup.stop,
+        target=setup.target,
+        reward_to_risk=setup.reward_to_risk,
+        model=model.name,
+        reason=setup.reason,
+        recent_performance={
+            "equity": manager.equity,
+            "trades_today": manager.day.trades if manager.day else 0,
+            "consecutive_losses": getattr(manager, "consecutive_losses", 0),
+        },
+    )
+    verdict = reviewer.review(request)
+    if journal is not None:
+        journal.record(request, verdict)
+    return verdict
+
+
 @dataclass
 class BacktestResult:
     """Everything a run produced, ready to report on."""
@@ -96,6 +127,9 @@ def run(
     detector_config: Config | None = None,
     starting_equity: float = 10_000.0,
     context: Context | None = None,
+    news_gate=None,
+    reviewer=None,
+    journal=None,
 ) -> BacktestResult:
     """Run one model over ``candles`` and return what happened.
 
@@ -105,6 +139,16 @@ def run(
     ``context`` lets a caller analyse once and run many models or many folds
     over the same candles. Analysing is most of the cost, so a walk forward
     that rebuilt it per fold would spend all its time in the detectors.
+
+    ``news_gate`` is a :class:`~ict.news.gate.NewsGate`. It blocks entries near
+    a high impact release and is a risk check, applied before the model is even
+    asked, so a model cannot forget it.
+
+    ``reviewer`` is the AI review layer. It runs last, after the risk checks
+    have passed, and may only shrink a trade or cancel it. ``journal`` records
+    every verdict including the ones that blocked a trade, which is what
+    :func:`~ict.review.audit.audit` needs to decide whether the layer earns its
+    place.
     """
     costs = costs or CostModel()
     risk = risk or RiskConfig()
@@ -135,11 +179,57 @@ def run(
     broker = Broker(costs=costs)
     manager = RiskManager(config=risk, starting_equity=starting_equity)
 
+    # The shadow broker answers "what would the blocked trade have done".
+    # Without it `skipped_r` is always zero and the audit that decides whether
+    # the review layer keeps its job can never fire.
+    #
+    # It carries its own risk manager, and that is not a detail. Blocking a
+    # trade changes the risk state: the loss never happens, so "one loss per
+    # session" never trips and the strategy goes on to see setups it would
+    # never have reached. Without a shadow manager the counterfactual counted
+    # all of them, and on forty days of test data it reported -277R against an
+    # unreviewed run's -26R, flattering a layer that blocks everything by a
+    # factor of ten.
+    #
+    # Both brokers hold one position at a time, so a counterfactual that would
+    # have overlapped a later real trade is still not simulated. That
+    # understates the layer's effect rather than overstating it, which is the
+    # safer way for the estimate to be wrong.
+    shadow = Broker(costs=costs) if journal is not None else None
+    shadow_manager = (
+        RiskManager(config=risk, starting_equity=starting_equity)
+        if journal is not None
+        else None
+    )
+    #: When the one live shadow order was reviewed. A shadow order that expires
+    #: unfilled leaves no outcome, which is correct: the counterfactual trade
+    #: never happened, so it cost nothing.
+    shadow_pending: pd.Timestamp | None = None
+    #: The shadow keeps its own week, because the real loop has already
+    #: advanced `current_week` by the time the shadow is asked, so sharing it
+    #: left the shadow's weekly pause on for the rest of the run.
+    shadow_week = None
+
+    # When the layer blocks a setup, the engine stays idle and the next candle
+    # offers the same setup again. Re-asking every minute is wrong twice: it
+    # counts one refusal as hundreds in the audit, and against a real API it is
+    # hundreds of calls for one decision. A block therefore occupies the engine
+    # for the order's life, which is what placing the order would have done.
+    blocked_until: pd.Timestamp | None = None
+
     median_spread = (
         float(candles["spread"].median()) if "spread" in candles.columns else 0.0
     )
 
     tradeable = model.tradeable_mask(candles.index)
+    if news_gate is not None:
+        # A risk check, so it narrows the tradeable window rather than being
+        # something the model consults and could skip.
+        blocked_by_news = news_gate.mask(candles.index)
+        tradeable = tradeable & ~blocked_by_news
+        blocked_count = int((model.tradeable_mask(candles.index) & blocked_by_news).sum())
+        if blocked_count:
+            manager.blocked["news blackout"] = blocked_count
     days = market_date(candles.index).to_numpy()
     weeks = candles.index.tz_convert(MARKET_TZ).isocalendar().week.to_numpy()
 
@@ -162,6 +252,29 @@ def run(
                 manager.resume()
                 pauses += 1
             current_week = week
+
+        if shadow is not None:
+            if shadow_manager.day is None or shadow_manager.day.day != day:
+                shadow_manager.start_day(day)
+            if week != shadow_week:
+                if shadow_manager.paused:
+                    shadow_manager.resume()
+                shadow_week = week
+
+        if shadow is not None and not shadow.is_idle:
+            before_shadow = len(shadow.trades)
+            shadow.on_candle(stamp, candle)
+            if len(shadow.trades) > before_shadow:
+                ghost = shadow.trades[-1]
+                shadow_manager.record(ghost.net)
+                if shadow_pending is not None:
+                    journal.settle(shadow_pending, ghost.r_multiple)
+                    shadow_pending = None
+            elif shadow.is_idle:
+                # The order expired without filling, so there is no outcome to
+                # attach. Leaving the key behind would settle some later trade
+                # against the wrong decision.
+                shadow_pending = None
 
         # Resolve anything live, on every candle, in or out of a window.
         if not broker.is_idle:
@@ -205,6 +318,38 @@ def run(
         size = manager.size_for(setup.risk)
         if size <= 0:
             continue
+
+        if reviewer is not None:
+            if blocked_until is not None and stamp < blocked_until:
+                continue
+            verdict = _review(reviewer, journal, setup, stamp, model, manager)
+            if shadow is not None and shadow.is_idle and shadow_manager.may_trade():
+                # Size is 1 because R is size independent, and this order never
+                # touches equity or the risk limits.
+                shadow.place(
+                    Order(
+                        placed_at=stamp,
+                        direction=setup.direction,
+                        limit=setup.limit,
+                        stop=setup.stop,
+                        target=setup.target,
+                        size=shadow_manager.size_for(setup.risk),
+                        expires_at=setup.expires_at or (stamp + model.order_life()),
+                        reason=setup.reason,
+                    )
+                )
+                shadow_pending = stamp
+            if verdict.blocks:
+                manager.blocked["review layer"] = (
+                    manager.blocked.get("review layer", 0) + 1
+                )
+                blocked_until = setup.expires_at or (stamp + model.order_life())
+                continue
+            blocked_until = None
+            size *= verdict.size_multiple
+            if size <= 0:
+                continue
+
         broker.place(
             Order(
                 placed_at=stamp,
@@ -219,6 +364,12 @@ def run(
         )
 
     # Nothing is carried past the end of the data.
+    if shadow is not None and not shadow.is_idle:
+        before_shadow = len(shadow.trades)
+        shadow.close_now(candles.index[-1], candles.iloc[-1], "backtest_end")
+        if len(shadow.trades) > before_shadow and shadow_pending is not None:
+            journal.settle(shadow_pending, shadow.trades[-1].r_multiple)
+
     if not broker.is_idle:
         last_stamp = candles.index[-1]
         broker.close_now(last_stamp, candles.iloc[-1], "backtest_end")

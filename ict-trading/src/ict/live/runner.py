@@ -139,6 +139,9 @@ class LiveRunner:
         risk: RiskConfig | None = None,
         detector_config: Config | None = None,
         guards: Guards | None = None,
+        news_gate=None,
+        reviewer=None,
+        journal=None,
         dry_run: bool = True,
     ) -> None:
         if history.empty:
@@ -155,6 +158,9 @@ class LiveRunner:
         self.overrides = overrides or {}
         self.detector_config = detector_config
         self.guards = guards or Guards()
+        self.news_gate = news_gate
+        self.reviewer = reviewer
+        self.journal = journal
         self.dry_run = dry_run
 
         equity = broker.equity() if not dry_run else 10_000.0
@@ -290,6 +296,15 @@ class LiveRunner:
         model = self.model()
         if not model.tradeable_at(stamp):
             return None
+
+        # A risk check, so it runs before the model is asked rather than being
+        # something the model could forget.
+        if self.news_gate is not None:
+            blackout = self.news_gate.blocked_at(stamp)
+            if blackout is not None:
+                log.info("blocked by news: %s", blackout)
+                return None
+
         if not self.risk.may_trade():
             return None
         if not self.dry_run and not self.broker.is_idle:
@@ -313,6 +328,20 @@ class LiveRunner:
         if size <= 0:
             return None
 
+        # The review layer runs last, on a setup that already passed every
+        # check code enforces, and may only shrink it or cancel it.
+        if self.reviewer is not None:
+            verdict = self.ask_reviewer(setup, stamp, model)
+            if verdict.blocks:
+                log.info("review layer skipped %s: %s", stamp, verdict.reason)
+                return None
+            if verdict.size_multiple < 1.0:
+                log.info("review layer reduced to %.0f%%: %s",
+                         verdict.size_multiple * 100, verdict.reason)
+            size *= verdict.size_multiple
+            if size <= 0:
+                return None
+
         if self.dry_run:
             log.info("DRY RUN would place %s %s @ %.5f stop %.5f target %.5f size %.0f",
                      setup.direction, self.broker.instrument_name, setup.limit,
@@ -325,6 +354,48 @@ class LiveRunner:
         log.info("placed %s: %s %.0f units @ %.5f", order.order_id,
                  setup.direction, order.units, setup.limit)
         return setup
+
+    def ask_reviewer(self, setup: Setup, stamp: pd.Timestamp, model: BaseModel):
+        """Put one setup to the review layer and record the answer.
+
+        The layer sees structured fields and never a chart. Upcoming events
+        come from the same gate the risk check uses, so the reviewer is
+        reasoning about the releases that are actually scheduled rather than
+        whatever it remembers.
+        """
+        from ..review import ReviewRequest
+
+        upcoming = []
+        if self.news_gate is not None:
+            horizon = stamp + pd.Timedelta(minutes=model.config.order_life_minutes + 60)
+            upcoming = [
+                str(b) for b in self.news_gate.blackouts
+                if stamp <= b.start <= horizon
+            ][:5]
+
+        request = ReviewRequest(
+            instrument=self.broker.instrument_name,
+            at=stamp,
+            direction=setup.direction,
+            entry=setup.limit,
+            stop=setup.stop,
+            target=setup.target,
+            reward_to_risk=setup.reward_to_risk,
+            model=model.name,
+            reason=setup.reason,
+            session=str(stamp.tz_convert(MARKET_TZ).strftime("%H:%M")),
+            upcoming_events=upcoming,
+            recent_performance={
+                "equity": self.risk.equity,
+                "peak_equity": self.risk.peak_equity,
+                "trades_today": self.risk.day.trades if self.risk.day else 0,
+                "consecutive_losses": self.consecutive_losses,
+            },
+        )
+        verdict = self.reviewer.review(request)
+        if self.journal is not None:
+            self.journal.record(request, verdict)
+        return verdict
 
     def reconcile(self) -> None:
         """Bring the loop's view of the account back to what the account says.
