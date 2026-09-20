@@ -175,7 +175,11 @@ Writing the tests found two real defects, both now fixed centrally:
 
 The walk forward ranking on generated data is in `docs/walk-forward.md`. It
 orders the code, not the models: on a random walk there is nothing to find, and
-none of these detectors has passed the 90% gate.
+none of these detectors has passed the 90% gate. The clearest evidence of that
+is in the document itself. Turtle soup came top of the rows that traded on 120
+days and bottom on 200, at +14.49R and then -94.32R, with nothing about the
+model changed. An ordering that does not survive a change of window is not an
+ordering.
 
 ## Later phases (do not build yet)
 

@@ -259,7 +259,8 @@ model that fires twice a year should not be ranked as though it were reliable.
 
 A ranking over generated data, with what each row is worth, is in
 [`docs/walk-forward.md`](docs/walk-forward.md). No model passes the project's
-criteria there, and the top two rows took three trades and two.
+criteria there, the top two rows took four trades and ten, and the ordering
+does not survive a change of window.
 
 The same `Context` — one pass of every detector over the whole series — is
 shared by every model and every fold. Analysing is most of the cost, and the
