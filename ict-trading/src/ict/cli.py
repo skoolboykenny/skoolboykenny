@@ -5,6 +5,7 @@
     ict plot    data/eurusd_1m.parquet --date 2024-03-14
     ict sample  data/eurusd_1m.parquet --count 20 --out verification/
     ict verify  data/eurusd_1m.parquet --labels verification/labels.csv
+    ict backtest data/processed/eurusd_m1.parquet --from 2021-01-01 --to 2023-12-31
     ict demo    --out data/demo_1m.parquet
 """
 
@@ -24,6 +25,10 @@ from .data.loader import find_gaps, load_csvs, read_parquet, write_parquet
 from .plotting.charts import plot_analysis, write_html
 from .timeframes.lookahead import TimeframeStack
 from .timeframes.resample import TIMEFRAMES, resample
+from .backtest import CostModel, RiskConfig, SilverBulletConfig
+from .backtest import measure as measure_backtest
+from .backtest import report as backtest_report
+from .backtest import run as run_backtest
 from .verification import (
     DEFAULT_TOLERANCE_CANDLES,
     blank_labels,
@@ -214,6 +219,51 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0 if all(item.passes for item in scores) else 1
 
 
+def cmd_backtest(args: argparse.Namespace) -> int:
+    """Run the Silver Bullet over a date range and report the result."""
+    candles = read_parquet(args.parquet, side=args.side)
+    if args.start:
+        candles = candles.loc[candles.index >= pd.Timestamp(args.start, tz="UTC")]
+    if args.end:
+        candles = candles.loc[candles.index <= pd.Timestamp(args.end, tz="UTC")]
+    if candles.empty:
+        print("no candles in that range", file=sys.stderr)
+        return 1
+
+    result = run_backtest(
+        candles,
+        costs=CostModel(
+            fallback_spread=args.spread,
+            slippage=args.slippage,
+            commission=args.commission,
+        ),
+        risk=RiskConfig(risk_per_trade=args.risk),
+        strategy_config=SilverBulletConfig(
+            minimum_r=args.minimum_r,
+            draw_timeframe=args.draw_timeframe,
+            order_life_minutes=args.order_life,
+        ),
+        starting_equity=args.equity,
+    )
+    metrics = measure_backtest(result)
+    print(
+        backtest_report(
+            result,
+            metrics,
+            combinations_tried=args.combinations_tried,
+            verified=args.verified,
+        )
+    )
+
+    if args.journal:
+        path = Path(args.journal)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        result.to_frame().to_csv(path, index=False)
+        print(f"\nwrote the trade journal to {path}")
+
+    return 0 if metrics.passes else 1
+
+
 def cmd_demo(args: argparse.Namespace) -> int:
     """Generate synthetic 1 minute candles, so the tooling runs before data lands."""
     candles = synthetic_candles(days=args.days, seed=args.seed)
@@ -297,6 +347,37 @@ def build_parser() -> argparse.ArgumentParser:
     )
     verify.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
     verify.set_defaults(func=cmd_verify)
+
+    backtest = sub.add_parser(
+        "backtest", help="run the Silver Bullet over a date range"
+    )
+    backtest.add_argument("parquet")
+    backtest.add_argument("--from", dest="start", default=None)
+    backtest.add_argument("--to", dest="end", default=None)
+    backtest.add_argument("--equity", type=float, default=10_000.0)
+    backtest.add_argument("--risk", type=float, default=0.005)
+    backtest.add_argument("--minimum-r", type=float, default=2.0)
+    backtest.add_argument("--order-life", type=int, default=20)
+    backtest.add_argument(
+        "--draw-timeframe", default="1h", choices=["15m", "1h", "4h"]
+    )
+    backtest.add_argument("--spread", type=float, default=0.00012)
+    backtest.add_argument("--slippage", type=float, default=0.00002)
+    backtest.add_argument("--commission", type=float, default=0.0)
+    backtest.add_argument("--journal", default=None, help="write trades to CSV")
+    backtest.add_argument(
+        "--combinations-tried",
+        type=int,
+        default=1,
+        help="how many parameter sets you have tried, for the report to state",
+    )
+    backtest.add_argument(
+        "--verified",
+        action="store_true",
+        help="assert the detectors have passed `ict verify`",
+    )
+    backtest.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
+    backtest.set_defaults(func=cmd_backtest)
 
     demo = sub.add_parser("demo", help="generate synthetic candles to exercise the tools")
     demo.add_argument("--days", type=int, default=5)

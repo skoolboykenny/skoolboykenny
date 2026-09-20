@@ -92,9 +92,49 @@ def test_equal_highs_cluster_into_one_pool():
     pools = find_pools(candles, config=LiquidityConfig(equal_tolerance_atr=2.0))
     buy_side = pools.loc[pools["side"] == "buy"]
 
-    assert len(buy_side) == 1
-    assert bool(buy_side.iloc[0]["is_equal_highs"]) is True
-    assert int(buy_side.iloc[0]["touches"]) == 2
+    # Two rows, but one cluster: the pool before and after the second high
+    # joined it. Each row is that pool as it stood at its own created_at.
+    assert buy_side["cluster"].nunique() == 1
+    assert len(buy_side) == 2
+
+    first, second = buy_side.iloc[0], buy_side.iloc[1]
+    assert int(first["touches"]) == 1
+    assert bool(first["is_equal_highs"]) is False
+    assert int(second["touches"]) == 2
+    assert bool(second["is_equal_highs"]) is True
+
+    # Collapsed to a point in time, it is one pool again.
+    live = unswept(pools, candles.index[-1])
+    assert len(live.loc[live["side"] == "buy"]) == 1
+
+
+def test_a_pool_does_not_disappear_from_its_own_past():
+    """Extending a pool later must not hide it from earlier.
+
+    A pool formed on one day and widened on another used to record only the
+    later time, so asking "what did I know then" on the first day found
+    nothing. That made the answer depend on how much future data was loaded.
+    """
+    candles = make_candles(
+        [
+            (10, 11, 9, 10),
+            (10, 12, 9, 11),
+            (11, 15.00, 10, 14),  # first high
+            (14, 13, 11, 12),
+            (12, 12, 10, 11),  # confirmed here
+            (11, 12, 10, 11),
+            (11, 15.01, 10, 14),  # second high joins the cluster
+            (14, 13, 11, 12),
+            (12, 12, 10, 11),
+        ]
+    )
+    pools = find_pools(candles, config=LiquidityConfig(equal_tolerance_atr=2.0))
+
+    # As at the fifth candle, only the first high exists, and it must be there.
+    early = unswept(pools, candles.index[4])
+    early_buy = early.loc[early["side"] == "buy"]
+    assert len(early_buy) == 1
+    assert int(early_buy.iloc[0]["touches"]) == 1
 
 
 def test_unswept_excludes_pools_already_taken():

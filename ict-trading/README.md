@@ -157,6 +157,50 @@ fails. Clearing 90% means being near perfect both ways.
 A label matches a detection within a few candles either side (`--tolerance`,
 default 2), because reading a timestamp off a chart by eye is approximate.
 
+## Backtesting the Silver Bullet (Phase 2)
+
+```bash
+ict backtest data/processed/eurusd_m1.parquet \
+    --from 2021-01-01 --to 2023-12-31 --journal journal.csv
+```
+
+Event driven, bar by bar, and pessimistic where the data is ambiguous. It
+exits non-zero unless all four pass criteria are met, so it can gate a build.
+
+The rule, from the project record: inside a Silver Bullet hour, a sweep against
+the draw, then the first fair value gap pointing at it. Limit at the gap, stop
+beyond the sweep extreme, target the draw, and only if that is at least 2R away.
+
+**What the engine assumes, and why it matters.**
+
+- A candle does not record the order it visited its high and low. When one
+  candle spans both the stop and the target, the stop is taken. The optimistic
+  reading turns losing systems into winning ones on paper.
+- An order cannot fill on the candle it was placed from. That decision was
+  made from the candle's close.
+- Stops are market orders and slip. Targets are limit orders and do not.
+  Assuming a stop fills exactly at its price is the most flattering thing a
+  backtest can do.
+- The spread comes from the data where the file has it, because the spread
+  widens exactly when these setups fire.
+- An order dies at the end of its window. A Silver Bullet entry filled at
+  lunchtime is a different strategy wearing the name.
+
+Risk is enforced, not assumed: 0.5% per trade sized from the stop distance, two
+trades a day, one loss ends the session, a 2% daily loss limit and a 6% weekly
+drawdown pause. The report counts how often each of those blocked an entry,
+because a strategy that only looks good before its limits is not a strategy.
+
+**Pass criteria**, all four, from the project record: profit factor above 1.3,
+expectancy above 0.2R, maximum drawdown below 15%, and at least 200 trades. The
+report also prints how many parameter combinations you have tried
+(`--combinations-tried`), since testing many ICT variants inflates the chance of
+a lucky result.
+
+Until `ict verify` passes, the report says so on every run. A profitable
+backtest built on unverified detectors is evidence about the code, not about
+the market.
+
 ## What is implemented
 
 | Concept | Definition in code |
