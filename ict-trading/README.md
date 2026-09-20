@@ -1,11 +1,17 @@
-# ICT Trading System — Phase 1: data and detectors
+# ICT Trading System
 
 Deterministic detectors for Inner Circle Trader concepts, a New York aligned
 timeframe stack, and annotated charts to check the detectors against by hand.
 
-This is Phase 1 only. There is no strategy, no broker connection and no AI
-layer here, by design: the question this phase answers is whether the concepts
-can be defined precisely enough to detect at all, not whether they make money.
+Phases 1 to 3 are built: the detectors, a backtest engine, the seven ICT models
+from the project record, and a walk forward that ranks them out of sample. There
+is no broker connection and no AI layer yet.
+
+The question these phases answer is whether the concepts can be defined
+precisely enough to detect and trade mechanically, not whether they make money.
+Nothing here has run on real market data, and the detectors have not passed the
+90% hand labelling gate, so every number the tooling prints describes the code
+rather than the market.
 
 > This is an engineering and research project, not financial advice. Leveraged
 > trading carries a high risk of loss.
@@ -214,6 +220,48 @@ Until `ict verify` passes, the report says so on every run. A profitable
 backtest built on unverified detectors is evidence about the code, not about
 the market.
 
+## The model set and walk forward (Phase 3)
+
+Phase 2 encoded one model. Phase 3 encodes the remaining six from the project
+record and adds the machinery to compare them without fooling ourselves.
+
+| Model | The rule it adds | Window |
+| --- | --- | --- |
+| `silver_bullet` | Sweep against the draw, then the first gap pointing at it | Three one hour windows |
+| `mentorship_2022` | Will not trade until structure has actually shifted | Kill zones |
+| `optimal_trade_entry` | Retracement into the 0.62 to 0.79 band of a displacement leg | Kill zones |
+| `power_of_three` | Manipulation out of the Asian range, then distribution back through it | London and New York open |
+| `judas_swing` | The first move away from the midnight open is the false one | London open |
+| `turtle_soup` | Failed break of a level several swings have touched | Any time |
+| `sweep_to_sweep` | Sweep one side, target the liquidity resting on the other | Any time |
+
+Every model is a `BaseModel` subclass with one method, `find_setup`, returning
+a limit, a stop and a target or nothing. Everything else — window gating, order
+life, the minimum R filter and the geometry check — lives in the base class, so
+a difference between two models is a difference in the rule and nothing else.
+
+```bash
+ict rank data/processed/eurusd_m1.parquet --train-days 40 --test-days 20
+```
+
+**Why walk forward rather than one backtest.** Tuning and reporting on the same
+data measures how well the search fitted that data. `ict rank` rolls a window
+forward: it tunes on `--train-days`, tests on the `--test-days` that follow, and
+pools only the test windows into the number it prints. The in sample result is
+kept, but only to compute *drift*: in sample expectancy minus out of sample. A
+large positive drift is the signature of a parameter search fitting noise, and
+it is often the most informative column in the table.
+
+Models are ranked on expectancy per trade in R. Profit factor flatters a model
+with three lucky trades, and net profit rewards whichever model traded most.
+Empty folds are counted next to the fold total rather than dropped, because a
+model that fires twice a year should not be ranked as though it were reliable.
+
+The same `Context` — one pass of every detector over the whole series — is
+shared by every model and every fold. Analysing is most of the cost, and the
+lookahead guard makes a shared analysis exactly equivalent to re-running the
+detectors per fold.
+
 ## What is implemented
 
 | Concept | Definition in code |
@@ -376,11 +424,12 @@ bias_candles = stack.as_of(now, "4h")
 src/ict/
   config.py          every tunable number
   analysis.py        runs the detectors in dependency order
-  cli.py             ingest · gaps · plot · sample · demo
+  cli.py             ingest · gaps · plot · sample · verify · backtest · rank · demo
   data/              vendor CSV readers, cleaning, Parquet store
   timeframes/        New York sessions, resampling, the lookahead guard
   detectors/         one module per concept, each a pure function
   plotting/          annotated charts
+  backtest/          engine, broker, costs, risk, the seven models, walk forward
 tests/               hand-built candle sequences with known answers
 ```
 
