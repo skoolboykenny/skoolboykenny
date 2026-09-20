@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..config import DisplacementConfig, OrderBlockConfig
+from ..config import DisplacementConfig, OrderBlockConfig, StructureConfig
 from ._scan import NOT_FOUND, PriceScanner
 from .displacement import displacement_mask
 from .structure import find_breaks_of_structure
@@ -49,6 +49,7 @@ def find_order_blocks(
     breaks: pd.DataFrame | None = None,
     config: OrderBlockConfig | None = None,
     displacement: DisplacementConfig | None = None,
+    structure: StructureConfig | None = None,
 ) -> pd.DataFrame:
     """Detect order blocks behind each break of structure.
 
@@ -58,7 +59,7 @@ def find_order_blocks(
     config = config or OrderBlockConfig()
     displacement = displacement or DisplacementConfig()
     if breaks is None:
-        breaks = find_breaks_of_structure(candles)
+        breaks = find_breaks_of_structure(candles, config=structure)
     if breaks.empty or candles.empty:
         return _empty()
 
