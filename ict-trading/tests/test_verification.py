@@ -367,3 +367,50 @@ def test_sample_charts_are_on_the_timeframe_they_claim(tmp_path):
     manifest = pd.read_csv(out / "manifest.csv")
     # A full trading day is 1440 one minute candles, or 96 fifteen minute ones.
     assert manifest["candles"].iloc[0] <= 96
+
+
+def test_charts_for_labelling_carry_no_detector_marks(tmp_path):
+    """The chart you label must not show you the answers.
+
+    Anchoring is the failure mode: shown the detector's marks, a labeller
+    agrees with them, the gate reports high agreement, and a systematically
+    wrong detector passes the check built to catch it.
+    """
+    parquet = tmp_path / "demo.parquet"
+    main(["demo", "--days", "3", "--out", str(parquet)])
+
+    out = tmp_path / "verification"
+    main(["sample", str(parquet), "--count", "1", "--out", str(out)])
+
+    chart = next(out.glob("*.html"))
+    body = chart.read_text()
+
+    for mark in ("swing high", "swing low", "liquidity pool", "sweep", "MSS"):
+        assert mark not in body, f"the labelling chart is showing {mark}"
+
+
+def test_answers_are_written_separately_when_asked_for(tmp_path):
+    parquet = tmp_path / "demo.parquet"
+    main(["demo", "--days", "3", "--out", str(parquet)])
+
+    out = tmp_path / "verification"
+    main(
+        [
+            "sample",
+            str(parquet),
+            "--count",
+            "1",
+            "--out",
+            str(out),
+            "--with-answers",
+        ]
+    )
+
+    answers = out / "answers"
+    assert answers.is_dir()
+    annotated = next(answers.glob("*_annotated.html"))
+    assert "liquidity pool" in annotated.read_text()
+
+    # The detector's counts are an answer key, so they live there too.
+    assert (answers / "manifest.csv").exists()
+    assert not (out / "manifest.csv").exists()
