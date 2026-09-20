@@ -201,6 +201,9 @@ trades a day, one loss ends the session, a 2% daily loss limit and a 6% weekly
 drawdown pause. The report counts how often each of those blocked an entry,
 because a strategy that only looks good before its limits is not a strategy.
 
+The latest run is written up in [`docs/backtest-results.md`](docs/backtest-results.md),
+including what it does and does not demonstrate.
+
 **Pass criteria**, all four, from the project record: profit factor above 1.3,
 expectancy above 0.2R, maximum drawdown below 15%, and at least 200 trades. The
 report also prints how many parameter combinations you have tried
