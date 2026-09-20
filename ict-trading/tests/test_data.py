@@ -153,3 +153,53 @@ def test_session_levels_are_not_available_before_they_are_finished():
     )
     assert "asian_high" not in set(at_0030["name"])
     assert "midnight_open" in set(at_0030["name"])
+
+
+def test_previous_week_levels_are_carried_across_the_new_week():
+    # Two full weeks of New York days, the second at a visibly higher price.
+    frames = []
+    for offset, price in ((0, 100.0), (7, 120.0)):
+        start = pd.Timestamp("2024-03-04 00:00", tz="America/New_York") + pd.Timedelta(
+            days=offset
+        )
+        index = pd.date_range(start.tz_convert("UTC"), periods=5 * 24 * 60, freq="1min")
+        frames.append(
+            pd.DataFrame(
+                {
+                    "open": price,
+                    "high": price + 1.0,
+                    "low": price - 1.0,
+                    "close": price,
+                    "volume": 10.0,
+                },
+                index=index.rename("timestamp"),
+            )
+        )
+    candles = pd.concat(frames)
+    levels = session_levels(candles)
+    weekly = levels.loc[levels["name"] == "previous_week_high"]
+
+    assert not weekly.empty
+    # Every day of week two carries week one's high of 101, once each.
+    assert set(weekly["price"]) == {101.0}
+    assert weekly["market_date"].nunique() == len(weekly)
+    assert str(weekly["market_date"].min()) == "2024-03-11"
+
+    lows = levels.loc[levels["name"] == "previous_week_low"]
+    assert set(lows["price"]) == {99.0}
+
+
+def test_previous_week_level_is_not_available_in_the_week_that_made_it():
+    index = pd.date_range(
+        pd.Timestamp("2024-03-04 00:00", tz="America/New_York").tz_convert("UTC"),
+        periods=5 * 24 * 60,
+        freq="1min",
+    )
+    candles = pd.DataFrame(
+        {"open": 1.0, "high": 1.5, "low": 0.5, "close": 1.2, "volume": 10.0},
+        index=index.rename("timestamp"),
+    )
+    levels = session_levels(candles)
+
+    # One week of data means there is no previous week to report.
+    assert levels.loc[levels["name"].str.startswith("previous_week")].empty
