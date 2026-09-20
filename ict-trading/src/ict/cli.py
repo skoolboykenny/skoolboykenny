@@ -126,6 +126,12 @@ def cmd_sample(args: argparse.Namespace) -> int:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Kept in a separate folder so they cannot be opened by accident while
+    # labelling.
+    answers_dir = out_dir / "answers"
+    if args.with_answers:
+        answers_dir.mkdir(parents=True, exist_ok=True)
+
     rows = []
     for day in sorted(chosen):
         frame = _day_slice(candles, str(day))
@@ -140,9 +146,29 @@ def cmd_sample(args: argparse.Namespace) -> int:
         analysis = analyse(
             frame, timeframe=args.timeframe, with_levels=args.timeframe == "1m"
         )
-        figure = plot_analysis(analysis, title=f"{day} · {args.timeframe}")
+
+        # The chart to label carries no detector marks. Showing someone the
+        # answers and then asking them to mark the chart independently is not
+        # verification: they would anchor on what is already drawn, and a
+        # detector that is systematically wrong would sail through the gate it
+        # exists to fail. Only the objective furniture is kept: the kill zone
+        # shading and the session levels, both read off the clock rather than
+        # inferred.
+        clean = plot_analysis(
+            analysis,
+            title=f"{day} · {args.timeframe} · mark this one",
+            show=("levels",),
+        )
         path = out_dir / f"{day}_{args.timeframe}.html"
-        write_html(figure, str(path))
+        write_html(clean, str(path))
+
+        if args.with_answers:
+            annotated = plot_analysis(
+                analysis, title=f"{day} · {args.timeframe} · detector output"
+            )
+            answer_path = answers_dir / f"{day}_{args.timeframe}_annotated.html"
+            write_html(annotated, str(answer_path))
+
         rows.append({"date": day, "chart": path.name, **analysis.counts()})
 
     if not rows:
@@ -151,6 +177,10 @@ def cmd_sample(args: argparse.Namespace) -> int:
 
     manifest = pd.DataFrame(rows)
     manifest_path = out_dir / "manifest.csv"
+    # The detector's own counts are an answer key too, so they are written
+    # where they will not be read by accident.
+    if args.with_answers:
+        manifest_path = answers_dir / "manifest.csv"
     manifest.to_csv(manifest_path, index=False)
 
     # A blank labels file, so there is an obvious place to record hand marks.
@@ -160,13 +190,18 @@ def cmd_sample(args: argparse.Namespace) -> int:
     else:
         blank_labels().to_csv(labels_path, index=False)
 
-    print(f"wrote {len(rows)} charts, {manifest_path} and {labels_path}")
-    print(manifest.to_string(index=False))
+    print(f"wrote {len(rows)} charts to {out_dir} and a blank {labels_path.name}")
     print(
-        "\nMark each chart by hand into labels.csv, one row per concept you can"
-        "\nsee, then score the detectors against it:"
+        "\nThe charts carry no detector marks, on purpose. Mark each one by"
+        "\nhand into labels.csv, one row per concept you can see, then score"
+        "\nthe detectors against your marks:"
         f"\n\n    ict verify {args.parquet} --labels {labels_path}\n"
     )
+    if args.with_answers:
+        print(
+            f"The detector's own output is in {answers_dir}. Do not open it"
+            "\nuntil after you have finished labelling.\n"
+        )
     return 0
 
 
@@ -332,6 +367,11 @@ def build_parser() -> argparse.ArgumentParser:
     sample.add_argument("--seed", type=int, default=1)
     sample.add_argument("--out", default="verification")
     sample.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
+    sample.add_argument(
+        "--with-answers",
+        action="store_true",
+        help="also write annotated charts, to review after labelling",
+    )
     sample.set_defaults(func=cmd_sample)
 
     verify = sub.add_parser(
