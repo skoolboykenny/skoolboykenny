@@ -219,7 +219,7 @@ the market.
 | Liquidity pool | Unswept swing that is the extreme of the candles before it; swings within a tolerance of ATR cluster as equal highs/lows |
 | Liquidity sweep | Wick a minimum distance beyond a pool that has stood a minimum time, close back inside within `K` candles |
 | Break of structure | Close beyond the last confirmed swing, in the trend direction |
-| Market structure shift | After a sweep, a displaced close beyond the last opposing swing |
+| Market structure shift | After a sweep, a close beyond the last opposing swing, where the leg from sweep to break displaced |
 | Displacement | Body at least `X` times prior ATR(14) **and** most of the candle's range |
 | Fair value gap | Candle 1 high below candle 3 low (inverse for bearish), with mitigation and inversion tracked |
 | Order block | Last opposing candle before a displacement leg that breaks structure, with its 50% mean threshold |
@@ -244,6 +244,28 @@ prominence doing most of the work. **The defaults are argued from the
 definition, not fitted.** They have never been checked against a hand marked
 chart, and tuning them on anything but real data would be fitting to noise.
 Re-tune them against `ict verify` before trusting any backtest.
+
+### A warning about the displacement threshold
+
+**Do not tune `DisplacementConfig` against synthetic data.** Measured over 60
+days of the generated random walk:
+
+```
+body / prior ATR       p50 0.39   p90 0.91   p95 1.12   p99 1.41
+threshold                                                   1.50
+displacement candles                                       0.62%
+```
+
+The 99th percentile sits below the threshold, so displacement barely exists and
+market structure shifts fire about once a week. That is not a miscalibrated
+threshold: a Gaussian random walk has no fat tails, and displacement is a fat
+tail event. Real forex has news spikes and session opens; it will clear 1.5
+ATR far more often.
+
+Lowering the threshold to make MSS fire more often on generated data would be
+calibrating to the absence of fat tails, and the detector would then fire
+constantly on real prices. The number to check is the share of displacement
+candles on real EUR/USD, not the MSS count here.
 
 Every threshold lives in `src/ict/config.py`. There are no magic numbers in
 detector code, so a later phase can sweep parameters by building a modified
