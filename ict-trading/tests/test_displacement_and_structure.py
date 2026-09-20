@@ -1,6 +1,6 @@
 import pytest
 
-from ict.config import DisplacementConfig, StructureConfig
+from ict.config import DisplacementConfig, LiquidityConfig, StructureConfig
 from ict.detectors.displacement import displacement_mask, find_displacements
 from ict.detectors.liquidity import find_sweeps
 from ict.detectors.structure import (
@@ -14,6 +14,19 @@ from .conftest import make_candles
 def _quiet(count: int, price: float = 100.0) -> list[tuple[float, float, float, float]]:
     """Small, balanced candles that establish a low ATR."""
     return [(price, price + 0.2, price - 0.2, price)] * count
+
+
+def _mechanics() -> LiquidityConfig:
+    """Sweep selection filters off.
+
+    Prominence, pool age and penetration decide which levels are worth
+    sweeping. These tests are about what an MSS requires once a sweep has
+    happened, so they take the sweep as given rather than building a fixture
+    long enough to satisfy the selection rules.
+    """
+    return LiquidityConfig(
+        prominence_lookback=0, min_pool_age_candles=0, min_penetration_atr=0.0
+    )
 
 
 def test_large_clean_body_is_displacement():
@@ -105,7 +118,7 @@ def test_mss_needs_a_sweep_and_displacement():
         ]
     )
     candles = make_candles(rows)
-    sweeps = find_sweeps(candles)
+    sweeps = find_sweeps(candles, config=_mechanics())
     shifts = find_market_structure_shifts(candles, sweeps=sweeps)
 
     assert not shifts.empty
@@ -136,7 +149,7 @@ def test_no_shift_without_displacement():
         ]
     )
     candles = make_candles(rows)
-    sweeps = find_sweeps(candles)
+    sweeps = find_sweeps(candles, config=_mechanics())
     shifts = find_market_structure_shifts(candles, sweeps=sweeps)
 
     assert shifts.empty
@@ -159,7 +172,7 @@ def test_shift_must_follow_the_sweep_within_the_lookback():
         + [(99.7, 103.0, 99.6, 102.8)]  # displacement, but far too late
     )
     candles = make_candles(rows)
-    sweeps = find_sweeps(candles)
+    sweeps = find_sweeps(candles, config=_mechanics())
     shifts = find_market_structure_shifts(
         candles, sweeps=sweeps, config=StructureConfig(sweep_lookback=3)
     )

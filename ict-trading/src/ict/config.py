@@ -36,6 +36,25 @@ class LiquidityConfig:
     #: pool ever made would also make the pass quadratic.
     equal_highs_lookback_pools: int = 20
 
+    # The three filters below decide what counts as liquidity worth sweeping.
+    # Without them every two bar fractal becomes a pool and every wick past it
+    # becomes a sweep, which fires roughly ten times a day on a 15 minute
+    # chart: far more often than the concept describes. Each threshold is a
+    # starting point argued from the definition, not a fitted value, and all
+    # three should be re-tuned against hand labels on real data.
+
+    #: A swing only becomes a pool if it is the extreme of this many candles
+    #: before it. Liquidity rests above levels that mattered, not above every
+    #: local wiggle.
+    prominence_lookback: int = 12
+    #: A pool cannot be swept until it has stood this many candles. Stops need
+    #: time to accumulate behind a level; one that formed twenty minutes ago
+    #: has nothing resting on it yet.
+    min_pool_age_candles: int = 4
+    #: Price must trade this far beyond the pool, as a fraction of ATR, for the
+    #: move to have actually run the stops rather than brushed the level.
+    min_penetration_atr: float = 0.10
+
 
 @dataclass(frozen=True)
 class DisplacementConfig:
