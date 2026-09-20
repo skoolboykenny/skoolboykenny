@@ -1,24 +1,62 @@
-# ICT Trading System: Research and Build Plan
+# ICT Trading System: Complete Project Record
 
-Ryan Kenaope · as of 2026-09-20
+Owner: Ryan Kenaope
+Date: 20 September 2026
 
-> Collected from the *profile projects* Claude project. Source doc: <https://claude.ai/artifact/N1REywcnzpx8QtRpj8d3A6>
+This file brings together the conversation summary, the agreed outcomes, the full research and build plan, the automation design and the Claude Code handoff brief.
+
+This is an engineering and research record, not financial advice. Leveraged trading carries a high risk of loss.
+
+---
+
+# Part 1: Conversation Summary and Outcomes
+
+## Starting point
+
+The trading project was already listed on Ryan's `ryan.php` portfolio page as "Options Pricing and Algorithmic Trading", an independent study from 2025 onwards, combining options pricing models with a rules based strategy built on technical analysis and ICT concepts. The open gap was a missing repository link.
+
+## About ICT
+
+ICT is the Inner Circle Trader, Michael J. Huddleston, known for free YouTube mentorships and a large following in retail forex and futures. His core concepts are liquidity, market structure shift, order blocks, fair value gaps, premium and discount, optimal trade entry, kill zones, the Silver Bullet and the Power of Three. He has no independently verified long term track record, and critics argue many concepts rename older ideas such as supply and demand and Wyckoff. Because his teaching is discretionary, the project's real value is turning it into precise, testable rules.
+
+## What was asked
+
+Build a trading tool covering all ICT concepts, with an AI model that reads charts and makes trading decisions using news, current affairs and ICT price models, supported by research and a council style decision process.
+
+## Outcomes agreed
+
+1. **Honest scope.** No model can guarantee correct decisions or profit. The target is a positive expectancy strategy with controlled drawdown, proven out of sample.
+2. **Rules before AI.** Price logic is deterministic Python. The AI layer reviews structured setups and news and may only skip or reduce a trade, never enlarge or trigger one.
+3. **Full ICT concept library** with codeable definitions and testable parameters.
+4. **Six ICT models** encoded separately: 2022 Mentorship model, Silver Bullet, Optimal Trade Entry, Power of Three, Judas swing and Turtle Soup, plus the sweep to sweep model.
+5. **Timeframe stack:** 4h bias, 1h PD arrays, 15m setup, 1m entry, all built from 1 minute data with strict no lookahead rules.
+6. **Sweep to sweep model:** after one liquidity pool is swept, target the opposing pool; close the runner when it is swept and watch for a reverse setup.
+7. **News event module** based on Ryan's own Forex Factory style trading, with a directional playbook and a spike correction playbook. Forex Factory has no official API and restricts scraping, so its weekly export is used for live data and a separate historical calendar for backtests.
+8. **Session and kill zone schedule** stored in New York time and converted for Gaborone.
+9. **Strict validation gates** before any live money: detector checks, backtest with costs, walk forward, robustness, paper trading, then small live.
+10. **Risk rules in code** that the AI cannot override.
+11. **Council verdict:** build the rule engine and backtester first, ship it as a portfolio piece, and treat the AI decision layer as a later filter that must earn its place with data.
+12. **Autonomous operation** on a VPS with a daily loop, self monitoring, alerts and a kill switch.
+13. **Handoff to Claude Code** for Phase 1 through a `CLAUDE.md` brief.
+
+---
+
+# Part 2: Research and Build Plan
 
 ## Scope and reality check
 
-The system turns ICT's discretionary teaching into explicit rules, tests whether they have an edge, and only then lets an AI layer assist decisions. No model can guarantee "the right trading decision"; the realistic target is a positive expectancy strategy with controlled drawdown, proven out of sample.
+The system turns ICT's discretionary teaching into explicit rules, tests whether they have an edge, and only then lets an AI layer assist decisions. No model can guarantee the right trading decision; the realistic target is a positive expectancy strategy with controlled drawdown, proven out of sample.
 
 - ICT concepts are taught visually and loosely. Every concept here gets one precise, codeable definition; where ICT is ambiguous, the choice is logged as a parameter to test.
 - The AI layer is a filter and explainer, not an oracle. Large language models are poor at reading exact price levels from images, so price logic lives in deterministic code and the AI works on structured outputs and news.
-- News is used to avoid or contextualise trades around scheduled releases, not to predict headlines.
+- News is used to avoid, contextualise or trade scheduled releases through a dedicated module, not to predict headlines.
 - Live money comes last, after backtest, walk forward and paper trading gates are passed.
-- This plan is an engineering and research document, not financial advice. Leveraged trading carries a high risk of loss.
 
-Facts about ICT's teaching below are drawn from general knowledge of his public material, not fetched sources; treat session times and model details as approximate until checked against his videos.
+Facts about ICT's teaching are drawn from general knowledge of his public material, not fetched sources; treat session times and model details as approximate until checked against his videos.
 
 ## ICT concept library
 
-Each concept becomes a detector function that returns zones or events with timestamps, so every model below is built from the same tested parts.
+Each concept becomes a detector function that returns zones or events with timestamps, so every model is built from the same tested parts.
 
 | Concept | Codeable definition | Parameters to test |
 | --- | --- | --- |
@@ -45,7 +83,7 @@ Each concept becomes a detector function that returns zones or events with times
 
 ## ICT trading models
 
-Six models are encoded as separate strategies sharing the concept library, so each can be tested and ranked on its own before any are combined.
+Each model is encoded as a separate strategy sharing the concept library, so each can be tested and ranked on its own before any are combined.
 
 | Model | Sequence | Entry | Stop | Target |
 | --- | --- | --- | --- | --- |
@@ -60,7 +98,7 @@ Market maker buy and sell models are treated as higher timeframe context rather 
 
 ## Sessions, kill zones and news
 
-All times are stored in New York time because ICT defines everything there; Gaborone is 6 hours ahead during US daylight saving and 7 hours ahead otherwise, so the engine converts, never hard codes.
+All times are stored in New York time because ICT defines everything there; Gaborone is 6 hours ahead during US daylight saving and 7 hours ahead otherwise, so the engine converts and never hard codes.
 
 | Window | New York time | Gaborone (UTC+2, US summer) | Use |
 | --- | --- | --- | --- |
@@ -77,7 +115,7 @@ All times are stored in New York time because ICT defines everything there; Gabo
 News rules:
 
 - Pull a high impact economic calendar (CPI, NFP, FOMC, GDP, PMI, central bank speeches) daily with actual, forecast and previous values.
-- No new entries from 15 minutes before to 15 minutes after a high impact release; FOMC days flagged separately because ICT treats 14:00 and the press conference differently.
+- ICT models make no new entries from 15 minutes before to 15 minutes after a high impact release; FOMC days are flagged separately.
 - Post release, the surprise (actual minus forecast) is stored as a feature so the backtest can learn whether it matters.
 - Headlines and current affairs feed a sentiment and risk flag from the AI layer; they can block trades, never trigger them alone.
 
@@ -101,7 +139,7 @@ News trading runs as its own strategy with two playbooks, directional and spike 
 - Revisions: a strong actual with a large downward revision to previous often reverses.
 - Spread and slippage: modelled at 3 to 5 times normal for the first 60 seconds.
 
-Pass the same validation gates as the ICT models, with at least 50 occurrences per event type before trusting its statistics.
+The news module passes the same validation gates as the ICT models, with at least 50 occurrences per event type before trusting its statistics.
 
 ## Timeframe stack and sweep to sweep
 
@@ -120,13 +158,13 @@ The engine may only read higher timeframe candles that have closed; lookahead is
 
 ## Strategy specification
 
-The core strategy is a top down, session gated 2022 model with Silver Bullet timing: daily bias from the higher timeframe, entry only after a sweep and MSS inside a kill zone, targeting the opposing liquidity.
+The core strategy is a top down, session gated 2022 model with Silver Bullet timing: bias from the higher timeframe, entry only after a sweep and MSS inside a kill zone, targeting the opposing liquidity.
 
 1. **Daily bias (before London).** On the 4 hour chart, identify the nearest unmitigated draw on liquidity. Bias is long if price is in discount and the draw is above; short if in premium and the draw is below; otherwise no trade that day.
 2. **Session levels.** Mark Asian high and low, previous day high and low, midnight open, and any new week opening gap.
 3. **News gate.** Skip the window if a high impact release falls inside it, per the news rules.
 4. **Setup (15 minute, at a 1 hour PD array).** Inside a kill zone, wait for a sweep of Asian or previous session liquidity against the bias, followed by displacement and an MSS in the bias direction.
-5. **Confluence score.** Add points for SMT divergence at the sweep, FVG overlapping OTE zone, sweep at a higher timeframe level, and entry within a Silver Bullet hour. Minimum score is a tested parameter.
+5. **Confluence score.** Add points for SMT divergence at the sweep, FVG overlapping the OTE zone, sweep at a higher timeframe level, and entry within a Silver Bullet hour. Minimum score is a tested parameter.
 6. **Entry (1 minute).** Limit order at the first FVG formed by the displacement; cancel if not filled within the window.
 7. **Stop.** Beyond the sweep extreme plus a buffer of 0.1 × ATR.
 8. **Targets.** Partial at 2R or the first internal liquidity; runner to the next opposing liquidity pool, closed when that pool is swept; move stop to break even after the partial.
@@ -169,11 +207,11 @@ A later machine learning step can train a classifier on logged setup features to
 
 A model advances only if it passes every gate below on data it was not tuned on.
 
-1. **Detector checks.** Hand label 100 charts per concept; the detector must agree with your labels at least 90% of the time.
+1. **Detector checks.** Hand label 100 charts per concept; the detector must agree with the labels at least 90% of the time.
 2. **In sample backtest.** Three years of 1 minute data, with spread, commission and 1 tick slippage included.
 3. **Walk forward.** Tune on 12 months, test on the next 3, roll forward; report only out of sample results.
 4. **Robustness.** Results must survive small parameter changes and Monte Carlo reshuffling of trade order.
-5. **Paper trading.** At least 3 months or 100 trades live on a demo account, results within the backtest's expected range.
+5. **Paper trading.** At least 3 months or 100 trades on a demo account, results within the backtest's expected range.
 6. **Small live.** Minimum position size for 3 further months before any scaling.
 
 Pass criteria: profit factor above 1.3, expectancy above 0.2R per trade, maximum drawdown below 15%, and at least 200 out of sample trades. Report the number of parameter combinations tried, since testing many ICT variants inflates the chance of a lucky result.
@@ -186,7 +224,8 @@ Risk is fixed per trade and capped per day, enforced in code the AI layer cannot
 - Maximum 2 trades per day and 2% daily loss limit; trading stops for the day when hit.
 - 6% weekly drawdown pauses the system for review.
 - ICT models stand aside during high impact news windows; only the news module trades them, at half normal risk. No entries while spread exceeds 2 times normal.
-- Position size calculated from stop distance, never adjusted by the AI upward.
+- Position size calculated from stop distance, never adjusted upward by the AI.
+- No stacking of correlated trades, for example long EUR/USD and long GBP/USD together.
 - Kill switch in the dashboard that flattens all positions and halts orders.
 
 ## Council verdict
@@ -230,11 +269,81 @@ Six phases over roughly six months part time, each ending in something demonstra
 | --- | --- | --- |
 | 1. Data and detectors | 1 to 3 | 1 minute data pipeline; swing, FVG, sweep, MSS, order block detectors; annotated chart plots |
 | 2. First model | 4 to 6 | Silver Bullet backtest with costs; results report |
-| 3. Full model set | 7 to 12 | 2022 model, OTE, Power of Three, Judas swing, Turtle Soup; walk forward results ranked |
-| 4. News and AI layer | 13 to 16 | Calendar gate, headline risk flag, LLM review returning take, skip or reduce with reasons |
+| 3. Full model set | 7 to 12 | 2022 model, OTE, Power of Three, Judas swing, Turtle Soup, sweep to sweep; walk forward results ranked |
+| 4. News and AI layer | 13 to 16 | Calendar gate, news playbooks, headline risk flag, LLM review returning take, skip or reduce with reasons |
 | 5. Dashboard and paper trading | 17 to 22 | Web dashboard, journal, demo account execution |
 | 6. Decision | 23 onwards | Go live small only if gates pass; publish the case study either way |
 
-- [ ] Choose data source and first instrument
+- [ ] Choose data source and first instrument (EUR/USD forex or NQ futures)
 - [ ] Set up repo on GitHub (also fills the missing portfolio link)
 - [ ] Code and verify the first three detectors
+
+---
+
+# Part 3: How the Trading Process Is Automated
+
+## The daily loop
+
+1. **Pre-session prep:** 4h bias, levels, news calendar.
+2. **Kill zone scanner:** runs on every closed 1 minute candle.
+3. **Setup detected:** sweep, MSS, FVG, aligned timeframe stack.
+4. **AI and risk checks:** news gate, limits, position size.
+5. **Order to broker:** limit entry with stop and target attached.
+6. **Trade management:** partials, break even, runner.
+7. **Journal and alerts:** phone message and daily summary.
+
+The scanner repeats for each kill zone. The risk checks form the safety layer and nothing in the loop can override them.
+
+Three technical pieces make it run:
+
+- **Scheduler:** the Python engine runs as a service on a VPS and wakes itself on a clock: prep before Asia, scanning only during kill zones, shutdown after New York.
+- **Live data stream:** the broker API streams prices; each closed 1 minute candle rebuilds the 15m, 1h and 4h candles and runs the detectors.
+- **Broker API:** when a setup passes the checks, the code places the order itself, then manages the position by the rules. OANDA's API supports all of this.
+
+## Pre-session prep in detail
+
+Runs once a day at about 19:30 New York time (01:30 in Gaborone during US summer), just before the Asian session.
+
+1. **Refresh data.** Pull the latest 1 minute candles, fill gaps, rebuild the 15m, 1h and 4h candles.
+2. **Set bias.** On the 4h, find the nearest unswept liquidity pool, check premium or discount, read structure direction. Result: long, short, or no trade today.
+3. **Map the path.** Mark 1h FVGs and order blocks between current price and the draw; only these zones count for 15m setups.
+4. **Mark levels.** Previous day and week highs and lows, equal highs and lows, new week opening gap, and the midnight open once it prints. Asian high and low are added when Asia closes.
+5. **Load news.** Pull the day's calendar, block windows around high impact releases, flag events for the news module.
+6. **Check account state.** Broker connection, balance, open positions, and whether daily or weekly loss limits are already hit.
+7. **Send the plan.** A short phone message, for example: "EUR/USD bias short, draw at 1.0850, CPI at 14:30 blocks NY AM."
+
+If bias is unclear or the account is halted, the day is marked "no trade" and the scanner stays off.
+
+## AI and risk checks in detail
+
+**Risk checks (code, cannot be overridden):**
+
+- News gate: no ICT entry within 15 minutes of a high impact release.
+- Loss limits: blocks if 2 trades already taken today, the 2% daily loss is hit, or the 6% weekly pause is active.
+- Spread and liquidity: blocks if spread is above 2 times normal.
+- Position size: calculated from stop distance so each loss equals 0.5% of the account.
+- Exposure: no stacking correlated trades.
+
+**AI review (runs only if risk checks pass):**
+
+- Receives structured data, not a raw chart: the setup, timeframe alignment, confluence score, upcoming events and recent headlines.
+- Answers take, skip or reduce size, with a written reason saved to the journal.
+- Can only make a trade smaller or cancel it, never larger or earlier.
+
+Every decision, including skipped ones, is logged. If skipped trades would have won more than they lost, the AI layer is switched off.
+
+---
+
+# Part 4: Claude Code Handoff Brief
+
+The Phase 1 brief lives at the repository root as [`CLAUDE.md`](../CLAUDE.md).
+
+---
+
+# Part 5: Next Steps
+
+1. Create an `ict-trading` folder, run `git init`, and add the brief as `CLAUDE.md`.
+2. Open Claude Code in the folder and send: "Read CLAUDE.md and build Phase 1. Start with the data loader and resampler, then the detectors with tests."
+3. Download a few months of EUR/USD 1 minute data from Dukascopy or HistData into `data/`.
+4. Push the repository to GitHub and link it from the portfolio page.
+5. Review the detector plots against ICT's definitions before starting the Silver Bullet backtest.

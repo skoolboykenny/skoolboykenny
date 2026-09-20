@@ -103,6 +103,8 @@ def session_levels(candles: pd.DataFrame) -> pd.DataFrame:
             }
         )
 
+    rows.extend(_weekly_levels(days, daily_high, daily_low, candles, dates))
+
     if not rows:
         return _empty()
     return (
@@ -110,6 +112,55 @@ def session_levels(candles: pd.DataFrame) -> pd.DataFrame:
         .sort_values(["market_date", "name"])
         .reset_index(drop=True)[list(LEVEL_COLUMNS)]
     )
+
+
+def _weekly_levels(
+    days: list,
+    daily_high: dict,
+    daily_low: dict,
+    candles: pd.DataFrame,
+    dates: pd.Series,
+) -> list[dict]:
+    """Previous week's high and low, carried across every day of the new week.
+
+    The week is keyed by ISO year and week number on the New York date, so a
+    Sunday evening open belongs to the week it opens, not the one that just
+    closed. The level becomes available on the first candle of the new week and
+    stays available for the rest of it.
+    """
+    weeks: dict[tuple[int, int], list] = {}
+    for day in days:
+        key = (day.isocalendar().year, day.isocalendar().week)
+        weeks.setdefault(key, []).append(day)
+
+    ordered = sorted(weeks)
+    rows: list[dict] = []
+
+    for previous_key, key in zip(ordered, ordered[1:]):
+        previous_days = weeks[previous_key]
+        high = max(daily_high[d] for d in previous_days)
+        low = min(daily_low[d] for d in previous_days)
+
+        week_days = weeks[key]
+        opened_at = candles.index[dates.to_numpy() == week_days[0]][0]
+        for day in week_days:
+            rows.append(
+                {
+                    "market_date": day,
+                    "name": "previous_week_high",
+                    "price": high,
+                    "available_from": opened_at,
+                }
+            )
+            rows.append(
+                {
+                    "market_date": day,
+                    "name": "previous_week_low",
+                    "price": low,
+                    "available_from": opened_at,
+                }
+            )
+    return rows
 
 
 def available_at(levels: pd.DataFrame, now: pd.Timestamp) -> pd.DataFrame:

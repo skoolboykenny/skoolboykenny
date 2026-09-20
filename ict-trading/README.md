@@ -11,7 +11,7 @@ can be defined precisely enough to detect at all, not whether they make money.
 > trading carries a high risk of loss.
 
 The full plan, including the later phases, is in
-[`docs/plan.md`](docs/plan.md).
+[`docs/project-record.md`](docs/project-record.md).
 
 ## Setup
 
@@ -104,7 +104,7 @@ first, then compare.
 | Displacement | Body at least `X` times prior ATR(14) **and** most of the candle's range |
 | Fair value gap | Candle 1 high below candle 3 low (inverse for bearish), with mitigation and inversion tracked |
 | Order block | Last opposing candle before a displacement leg that breaks structure, with its 50% mean threshold |
-| Session levels | Asian high/low, previous day high/low, midnight open |
+| Session levels | Asian high/low, previous day and week high/low, midnight open |
 
 Every threshold lives in `src/ict/config.py`. There are no magic numbers in
 detector code, so a later phase can sweep parameters by building a modified
