@@ -3,6 +3,7 @@ import pytest
 from ict.config import DisplacementConfig, LiquidityConfig, StructureConfig
 from ict.detectors.displacement import displacement_mask, find_displacements
 from ict.detectors.liquidity import find_sweeps
+from ict.detectors.swings import find_swings
 from ict.detectors.structure import (
     find_breaks_of_structure,
     find_market_structure_shifts,
@@ -244,3 +245,34 @@ def test_a_leg_with_no_displacement_anywhere_is_still_rejected():
         candles, sweeps=sweeps, config=StructureConfig(displacement_in_leg=True)
     )
     assert shifts.empty
+
+
+def test_a_minor_fractal_is_not_a_structure_point():
+    """Every swing being structure makes a break of structure meaningless.
+
+    Nearly every swing is eventually closed beyond, so without a significance
+    filter the detector fires on almost all of them: seventeen times a day on
+    a 15 minute chart in the test data.
+    """
+    rows = (
+        _quiet(8, 100.0)
+        + [(100, 112, 99, 111)]  # a large high: real structure
+        + _quiet(4, 105.0)
+        + [(105, 106, 104, 105)]  # a minor high well inside it
+        + _quiet(3, 105.0)
+        + [(105, 107, 104, 106.5)]  # closes beyond the minor high only
+        + _quiet(4, 106.0)
+    )
+    candles = make_candles(rows)
+    swings = find_swings(candles)
+
+    loose = find_breaks_of_structure(
+        candles, swings=swings, config=StructureConfig(prominence_lookback=0)
+    )
+    strict = find_breaks_of_structure(
+        candles, swings=swings, config=StructureConfig(prominence_lookback=10)
+    )
+
+    assert len(strict) < len(loose)
+    # The minor high at 106 is not structure, so breaking it is not a BOS.
+    assert 106.0 not in set(strict["level"])

@@ -70,6 +70,25 @@ class DisplacementConfig:
 class StructureConfig:
     #: An MSS must follow a sweep no more than this many candles back.
     sweep_lookback: int = 12
+    #: A swing only counts as a structure point if it is the extreme of this
+    #: many candles before it.
+    #:
+    #: Without it every two bar fractal is structure, and since nearly every
+    #: swing is eventually closed beyond, "break of structure" fires about
+    #: seventeen times a day on a 15 minute chart and means almost nothing.
+    #: Structure is the levels a trend is actually built on. Mirrors the same
+    #: filter on liquidity pools, for the same reason.
+    prominence_lookback: int = 12
+    #: The same filter for the swing a market structure shift has to break,
+    #: kept separate because it is a different question.
+    #:
+    #: A break of structure confirms a trend and should break a level the
+    #: trend is built on. A shift reverses one, and ICT reads it against the
+    #: last opposing *short term* swing, so holding it to the same standard
+    #: makes it far rarer than the concept describes. This is the least
+    #: certain of the prominence settings and the first to revisit against
+    #: hand labels.
+    mss_prominence_lookback: int = 6
     #: Whether displacement may come from any candle in the leg running from
     #: the sweep to the break, rather than from the breaking candle alone.
     #:

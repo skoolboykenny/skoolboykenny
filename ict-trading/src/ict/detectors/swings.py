@@ -85,6 +85,37 @@ def find_swings(
     )
 
 
+def prominent(
+    candles: pd.DataFrame, swings: pd.DataFrame, lookback: int
+) -> pd.DataFrame:
+    """Keep only swings that are the extreme of the ``lookback`` before them.
+
+    A swing high two candles wide is a local wiggle. Liquidity rests above a
+    high that stood out, so a pool needs the swing to be the highest point of
+    a meaningful stretch of chart, not just of its two neighbours.
+    """
+    if lookback <= 0 or swings.empty:
+        return swings
+
+    highs = candles["high"]
+    lows = candles["low"]
+    prior_high = highs.rolling(lookback, min_periods=1).max().shift(1)
+    prior_low = lows.rolling(lookback, min_periods=1).min().shift(1)
+
+    ceiling = prior_high.reindex(swings["time"]).to_numpy()
+    floor = prior_low.reindex(swings["time"]).to_numpy()
+    prices = swings["price"].to_numpy()
+    is_high = (swings["kind"] == "high").to_numpy()
+
+    # NaN ceiling means nothing came before it, which cannot be ruled out.
+    keep = np.where(
+        is_high,
+        ~(prices <= ceiling),
+        ~(prices >= floor),
+    )
+    return swings.loc[keep].reset_index(drop=True)
+
+
 def confirmed_by(swings: pd.DataFrame, now: pd.Timestamp) -> pd.DataFrame:
     """The swings whose right-hand side had closed by ``now``."""
     if swings.empty:
