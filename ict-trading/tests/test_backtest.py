@@ -504,3 +504,36 @@ def test_costs_reduce_the_result():
 
     if not free.to_frame().empty and not charged.to_frame().empty:
         assert charged.final_equity < free.final_equity
+
+
+def test_the_strategy_never_rests_an_order_at_a_spent_gap():
+    """A gap price has already traded back into is not an entry.
+
+    The imbalance is gone: resting a limit there waits for something that no
+    longer exists. Before this was enforced, 82% of setups on the test data
+    were built on gaps that had already been mitigated.
+    """
+    from ict.analysis import analyse
+    from ict.backtest.silver_bullet import SilverBullet
+    from ict.detectors.fvg import unmitigated
+    from ict.timeframes.resample import resample
+
+    candles = synthetic_candles(days=20)
+    entry = analyse(candles, "1m")
+    draw = analyse(resample(candles, "1h"), "1h")
+    strategy = SilverBullet(entry, draw)
+
+    checked = 0
+    for now in candles.index[::7]:
+        setup = strategy.find_setup(now, candles.loc[now])
+        if setup is None:
+            continue
+        checked += 1
+        live = unmitigated(entry.fvgs, now)
+        at_limit = live.loc[
+            (live["top"] == setup.limit) | (live["bottom"] == setup.limit)
+        ]
+        assert not at_limit.empty, f"order rested at a spent gap at {now}"
+
+    if checked == 0:
+        pytest.skip("no setups in this fixture")
