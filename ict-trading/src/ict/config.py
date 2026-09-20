@@ -70,6 +70,14 @@ class DisplacementConfig:
 class StructureConfig:
     #: An MSS must follow a sweep no more than this many candles back.
     sweep_lookback: int = 12
+    #: Whether displacement may come from any candle in the leg running from
+    #: the sweep to the break, rather than from the breaking candle alone.
+    #:
+    #: ICT describes a displacement *leg* that breaks structure. A three
+    #: candle impulse whose second candle is the large one and whose third
+    #: closes beyond the swing is a textbook shift, and requiring the breaking
+    #: candle to be the displacing one rejects it.
+    displacement_in_leg: bool = True
 
 
 @dataclass(frozen=True)

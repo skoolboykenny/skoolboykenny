@@ -102,6 +102,15 @@ bugs, one of them in the Phase 1 pool detector.
 Sampling exports unmarked charts: the labelling chart must not show the
 detector's own answers, or anchoring inflates the score.
 
+Detector tuning so far: the liquidity pool and sweep definitions were
+tightened (prominence, pool age, penetration), taking sweeps from 13.5 a day to
+4.3. The MSS detector was **not** threshold tuned, deliberately: on the
+synthetic random walk the 99th percentile of body over prior ATR is 1.41
+against a 1.5 threshold, so displacement is nearly absent because the data has
+no fat tails. Lowering it there would calibrate to noise. Only a definitional
+fix was made, allowing displacement to come from any candle in the leg between
+the sweep and the break rather than the breaking candle alone.
+
 **Still true: the detectors have not passed the 90% gate and nothing has run on
 real data.** The report states this on every run unless `--verified` is passed.
 Do not act on a result until `ict verify` passes on real data.
