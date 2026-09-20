@@ -35,6 +35,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from ..analysis import Analysis
+from ..detectors.fvg import unmitigated
 from ..detectors.liquidity import unswept
 from ..timeframes.lookahead import knowable_at
 from ..timeframes.sessions import SILVER_BULLET_WINDOWS, in_window, window_by_name
@@ -166,8 +167,12 @@ class SilverBullet:
             return None
         sweep = sweeps.iloc[-1]
 
-        # The first gap formed after that sweep, pointing at the draw.
+        # The first gap formed after that sweep, pointing at the draw, that
+        # price has not already traded back into. A mitigated gap is spent:
+        # resting a limit order at a level price has been through and left is
+        # waiting for an imbalance that no longer exists.
         gaps = knowable_at(self.entry.fvgs, self.config.entry_timeframe, now)
+        gaps = unmitigated(gaps, now)
         gaps = gaps.loc[gaps["time"] > sweep["closed_back_at"]]
         wanted_gap = "bullish" if direction == "long" else "bearish"
         gaps = gaps.loc[gaps["direction"] == wanted_gap]
