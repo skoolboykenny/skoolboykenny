@@ -64,6 +64,26 @@ detectors with chart plots. No strategy, no broker, no AI yet.
   and 4h.
 - A README explains setup, data download and how to run the plots.
 
+### Status
+
+Every deliverable above is built and tested, and the definition of done is met
+on the two points code can meet:
+
+- `pytest` passes (104 tests).
+- `ict plot <parquet> --date <day>` annotates 1m, 15m, 1h and 4h.
+- `README.md` covers setup, data and plotting; `DATA.md` covers the download.
+
+**The 90% gate is not met and cannot be met by writing code.** The tooling to
+run it exists (`ict sample` exports charts and a blank `labels.csv`, `ict
+verify` scores them and exits non-zero below the gate), but the labelling is
+manual. Until 100 charts per concept have been marked and scored, the detectors
+are plausible rather than verified, and no Phase 2 result should be trusted.
+
+Nothing has been run against real market data. The download step needs a
+machine that can reach `datafeed.dukascopy.com`; see `DATA.md`.
+
+Do not start Phase 2 before the gate passes.
+
 ## Later phases (do not build yet)
 
 2. Silver Bullet backtest with spread, commission and slippage.
