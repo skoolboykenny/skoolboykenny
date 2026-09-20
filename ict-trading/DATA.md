@@ -97,6 +97,19 @@ is blocking `datafeed.dukascopy.com`, which some corporate networks and
 sandboxed environments do. The download must be run somewhere with access to
 it.
 
+## Reading the processed files
+
+The detectors read these directly. They run on the mid price by default, with
+the other two sides available:
+
+```bash
+ict plot data/processed/eurusd_m1.parquet --date 2024-03-14
+ict plot data/processed/eurusd_m1.parquet --date 2024-03-14 --side bid
+```
+
+The `spread` column is carried through rather than dropped, so a later phase
+can refuse to trade a minute where the spread was wider than normal.
+
 ## Gaps
 
 `build_parquet.py` reports every gap longer than five minutes that is not the
