@@ -257,6 +257,10 @@ with three lucky trades, and net profit rewards whichever model traded most.
 Empty folds are counted next to the fold total rather than dropped, because a
 model that fires twice a year should not be ranked as though it were reliable.
 
+A ranking over generated data, with what each row is worth, is in
+[`docs/walk-forward.md`](docs/walk-forward.md). No model passes the project's
+criteria there, and the top two rows took three trades and two.
+
 The same `Context` — one pass of every detector over the whole series — is
 shared by every model and every fold. Analysing is most of the cost, and the
 lookahead guard makes a shared analysis exactly equivalent to re-running the
