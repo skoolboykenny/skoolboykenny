@@ -81,8 +81,14 @@ Synthetic data is for checking the pipeline runs. It is a random walk, so any
 ## Plotting a day
 
 ```bash
-ict plot data/eurusd_1m.parquet --date 2024-03-14 --out charts
+ict plot data/processed/eurusd_m1.parquet --date 2024-03-14 --out charts
 ```
+
+Files from the data step carry bid, ask and mid prices side by side. The
+detectors run on the mid price by default; `--side bid` or `--side ask` reads
+the other two. The spread is carried along rather than dropped, because a
+backtest that fills at the mid and ignores it will look better than the broker
+will.
 
 Writes one standalone HTML chart per timeframe (4h, 1h, 15m, 1m), each with
 swings, liquidity pools, sweeps, market structure shifts, fair value gaps,
@@ -94,17 +100,62 @@ a 4h chart of one day would be six candles.
 
 ## Verifying the detectors
 
-The gate is 90% agreement with hand labels over 100 charts per concept. Export
-a random sample to mark up:
+This is the gate that decides whether any of the rest is worth building on:
+90% agreement with hand labels, per concept. It is manual on purpose. Nothing
+here can tell you whether a detector sees what you see.
+
+**1. Export a random sample.**
 
 ```bash
-ict sample data/eurusd_1m.parquet --count 100 --timeframe 15m --out verification
+ict sample data/processed/eurusd_m1.parquet --count 100 --timeframe 15m \
+    --out verification
 ```
 
 Days are chosen at random rather than picked, so the sample is not quietly
-drawn from days the detectors already handle. Alongside the charts it writes
-`manifest.csv` with the detector's own counts per day — mark each chart by hand
-first, then compare.
+drawn from days the detectors already handle. It writes one chart per day,
+`manifest.csv` with the detector's own counts, and a blank `labels.csv`.
+
+**2. Mark the charts by hand.** One row per concept you can see, into
+`labels.csv`. Times are New York wall clock, matching the chart axis:
+
+```csv
+date,timeframe,concept,time,note
+2024-03-14,15m,sweep,2024-03-14 09:32,took Asian low
+2024-03-14,15m,mss,2024-03-14 09:47,
+2024-03-14,15m,fvg,2024-03-14 09:51,entry gap
+```
+
+Concepts: `swing_high`, `swing_low`, `sweep`, `mss`, `fvg`, `order_block`.
+
+**3. Score them.**
+
+```bash
+ict verify data/processed/eurusd_m1.parquet --labels verification/labels.csv
+```
+
+```
+concept        labelled detected  matched   recall  precision  agreement  gate
+----------------------------------------------------------------------------
+sweep                10       11        8     0.80       0.73       0.62  FAIL
+
+1 of 1 concepts below the 90% gate: sweep
+Those detectors are not ready to build a backtest on.
+```
+
+It exits non-zero while anything is below the gate, so it can sit in CI later.
+
+**Recall** is how much of what you marked the detector found. **Precision** is
+how much of what it found you marked. Low precision is the more dangerous
+failure: invented structure becomes trades.
+
+**Agreement** is matched over everything either side claimed, and it is what
+the gate reads. It is deliberately stricter than either number alone: ten marks
+against ten detections with nine matched is one miss *and* one invention, so
+recall and precision are both 0.90 while agreement is 9/11 = 0.82 and the gate
+fails. Clearing 90% means being near perfect both ways.
+
+A label matches a detection within a few candles either side (`--tolerance`,
+default 2), because reading a timestamp off a chart by eye is approximate.
 
 ## What is implemented
 
