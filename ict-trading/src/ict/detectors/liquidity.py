@@ -67,6 +67,37 @@ def _empty_sweeps() -> pd.DataFrame:
     )
 
 
+def prominent(
+    candles: pd.DataFrame, swings: pd.DataFrame, lookback: int
+) -> pd.DataFrame:
+    """Keep only swings that are the extreme of the ``lookback`` before them.
+
+    A swing high two candles wide is a local wiggle. Liquidity rests above a
+    high that stood out, so a pool needs the swing to be the highest point of
+    a meaningful stretch of chart, not just of its two neighbours.
+    """
+    if lookback <= 0 or swings.empty:
+        return swings
+
+    highs = candles["high"]
+    lows = candles["low"]
+    prior_high = highs.rolling(lookback, min_periods=1).max().shift(1)
+    prior_low = lows.rolling(lookback, min_periods=1).min().shift(1)
+
+    ceiling = prior_high.reindex(swings["time"]).to_numpy()
+    floor = prior_low.reindex(swings["time"]).to_numpy()
+    prices = swings["price"].to_numpy()
+    is_high = (swings["kind"] == "high").to_numpy()
+
+    # NaN ceiling means nothing came before it, which cannot be ruled out.
+    keep = np.where(
+        is_high,
+        ~(prices <= ceiling),
+        ~(prices >= floor),
+    )
+    return swings.loc[keep].reset_index(drop=True)
+
+
 def find_pools(
     candles: pd.DataFrame,
     swings: pd.DataFrame | None = None,
@@ -94,6 +125,7 @@ def find_pools(
     config = config or LiquidityConfig()
     if swings is None:
         swings = find_swings(candles)
+    swings = prominent(candles, swings, config.prominence_lookback)
     if swings.empty:
         return _empty_pools()
 
@@ -214,12 +246,15 @@ def find_sweeps(
     index = candles.index
     highs, lows, closes = scanner.highs, scanner.lows, scanner.closes
 
+    reference = atr(candles, DisplacementConfig().atr_period).to_numpy()
     created = index.searchsorted(pools["created_at"].to_numpy(), side="right")
+    # A pool has to stand for a while before anything rests on it.
+    earliest = created + max(config.min_pool_age_candles, 0)
     prices = pools["price"].to_numpy()
     sides = pools["side"].to_numpy()
     rows = []
 
-    for start_at, price, side in zip(created, prices, sides):
+    for start_at, price, side in zip(earliest, prices, sides):
         buy_side = side == "buy"
         breached = scanner.first_traded_beyond(int(start_at), float(price), buy_side)
         if breached == NOT_FOUND:
@@ -235,14 +270,21 @@ def find_sweeps(
 
         confirm_at = breached + int(confirmations[0])
         span = slice(breached, confirm_at + 1)
+        extreme = float(highs[span].max() if buy_side else lows[span].min())
+
+        # Brushing the level is not running the stops behind it.
+        scale = reference[breached]
+        if scale == scale and scale > 0:
+            penetration = abs(extreme - float(price))
+            if penetration < config.min_penetration_atr * scale:
+                continue
+
         rows.append(
             {
                 "time": index[breached],
                 "pool_price": float(price),
                 "side": side,
-                "extreme": float(
-                    highs[span].max() if buy_side else lows[span].min()
-                ),
+                "extreme": extreme,
                 "closed_back_at": index[confirm_at],
             }
         )
