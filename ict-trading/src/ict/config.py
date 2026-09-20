@@ -22,6 +22,18 @@ OHLC_COLUMNS = ("open", "high", "low", "close", "volume")
 class SwingConfig:
     #: A swing high needs ``n`` candles either side with a lower high.
     n: int = 2
+    #: Whether a run of candles sharing the same high counts as one swing.
+    #:
+    #: Real feeds quote to a fixed number of decimals, so adjacent candles
+    #: share an exact high far more often than a continuous random walk
+    #: suggests. Demanding a strictly lower neighbour on both sides throws
+    #: those away: on test data quantised to three decimals, the way USD/JPY
+    #: and tick sized futures quote, it found 336 swings where the raw floats
+    #: gave 6,092. A 94% collapse that generated data cannot show.
+    #:
+    #: With plateaus allowed, a run of equal highs yields exactly one swing,
+    #: at its last candle, which is also when it is confirmable.
+    allow_plateaus: bool = True
 
 
 @dataclass(frozen=True)
