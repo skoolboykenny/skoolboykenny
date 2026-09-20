@@ -4,6 +4,7 @@
     ict gaps    data/eurusd_1m.parquet
     ict plot    data/eurusd_1m.parquet --date 2024-03-14
     ict sample  data/eurusd_1m.parquet --count 20 --out verification/
+    ict verify  data/eurusd_1m.parquet --labels verification/labels.csv
     ict demo    --out data/demo_1m.parquet
 """
 
@@ -17,12 +18,19 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .analysis import analyse
+from .analysis import Analysis, analyse
 from .config import MARKET_TZ
 from .data.loader import find_gaps, load_csvs, read_parquet, write_parquet
 from .plotting.charts import plot_analysis, write_html
 from .timeframes.lookahead import TimeframeStack
 from .timeframes.resample import TIMEFRAMES, resample
+from .verification import (
+    DEFAULT_TOLERANCE_CANDLES,
+    blank_labels,
+    read_labels,
+    report,
+    score,
+)
 
 
 def _day_slice(candles: pd.DataFrame, day: str) -> pd.DataFrame:
@@ -34,6 +42,7 @@ def _day_slice(candles: pd.DataFrame, day: str) -> pd.DataFrame:
 
 
 def cmd_ingest(args: argparse.Namespace) -> int:
+    """Read vendor CSVs into a cleaned Parquet store."""
     candles, report = load_csvs(args.paths, source=args.source)
     print(report.summary())
     if candles.empty:
@@ -45,7 +54,8 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
 
 def cmd_gaps(args: argparse.Namespace) -> int:
-    candles = read_parquet(args.parquet)
+    """Report the holes in a stored series, largest first."""
+    candles = read_parquet(args.parquet, side=args.side)
     gaps = find_gaps(candles, minimum=args.minimum)
     if gaps.empty:
         print(f"no gaps longer than {args.minimum}")
@@ -56,7 +66,8 @@ def cmd_gaps(args: argparse.Namespace) -> int:
 
 
 def cmd_plot(args: argparse.Namespace) -> int:
-    candles = read_parquet(args.parquet)
+    """Annotate one New York day across the timeframe stack."""
+    candles = read_parquet(args.parquet, side=args.side)
     day = _day_slice(candles, args.date)
     if day.empty:
         print(f"no candles on {args.date}", file=sys.stderr)
@@ -99,7 +110,7 @@ def cmd_sample(args: argparse.Namespace) -> int:
     concept. This is how those charts get produced: randomly, so the sample is
     not quietly chosen from days the detectors already handle well.
     """
-    candles = read_parquet(args.parquet)
+    candles = read_parquet(args.parquet, side=args.side)
     days = sorted({stamp.date() for stamp in candles.tz_convert(MARKET_TZ).index})
     if not days:
         print("no candles to sample", file=sys.stderr)
@@ -115,7 +126,15 @@ def cmd_sample(args: argparse.Namespace) -> int:
         frame = _day_slice(candles, str(day))
         if frame.empty:
             continue
-        analysis = analyse(frame, timeframe=args.timeframe, with_levels=True)
+        if args.timeframe != "1m":
+            # The chart has to be on the timeframe it claims: a 15m label
+            # scored against 1m detectors would fail for the wrong reason.
+            frame = resample(frame, args.timeframe)
+            if frame.empty:
+                continue
+        analysis = analyse(
+            frame, timeframe=args.timeframe, with_levels=args.timeframe == "1m"
+        )
         figure = plot_analysis(analysis, title=f"{day} · {args.timeframe}")
         path = out_dir / f"{day}_{args.timeframe}.html"
         write_html(figure, str(path))
@@ -128,10 +147,71 @@ def cmd_sample(args: argparse.Namespace) -> int:
     manifest = pd.DataFrame(rows)
     manifest_path = out_dir / "manifest.csv"
     manifest.to_csv(manifest_path, index=False)
-    print(f"wrote {len(rows)} charts and {manifest_path}")
-    print("\nMark each chart by hand, then compare against these counts:\n")
+
+    # A blank labels file, so there is an obvious place to record hand marks.
+    labels_path = out_dir / "labels.csv"
+    if labels_path.exists():
+        print(f"kept the existing {labels_path}")
+    else:
+        blank_labels().to_csv(labels_path, index=False)
+
+    print(f"wrote {len(rows)} charts, {manifest_path} and {labels_path}")
     print(manifest.to_string(index=False))
+    print(
+        "\nMark each chart by hand into labels.csv, one row per concept you can"
+        "\nsee, then score the detectors against it:"
+        f"\n\n    ict verify {args.parquet} --labels {labels_path}\n"
+    )
     return 0
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    """Score hand labels against the detectors, and apply the 90% gate."""
+    labels = read_labels(args.labels)
+    if labels.empty:
+        print(
+            f"{args.labels} has no labels in it yet. Mark the charts from "
+            "`ict sample` first.",
+            file=sys.stderr,
+        )
+        return 1
+
+    candles = read_parquet(args.parquet, side=args.side)
+    wanted = {
+        (str(day), str(timeframe))
+        for day, timeframe in zip(labels["date"], labels["timeframe"])
+    }
+
+    analyses: dict[tuple[str, str], Analysis] = {}
+    for day, timeframe in sorted(wanted):
+        frame = _day_slice(candles, day)
+        if frame.empty:
+            print(f"warning: no candles on {day}, skipped", file=sys.stderr)
+            continue
+        if timeframe != "1m":
+            frame = resample(frame, timeframe)
+        if frame.empty:
+            continue
+        analyses[(day, timeframe)] = analyse(
+            frame, timeframe=timeframe, with_levels=timeframe == "1m"
+        )
+
+    if not analyses:
+        print("none of the labelled days are in this file", file=sys.stderr)
+        return 1
+
+    # The tolerance is in candles, so it scales with the timeframe marked.
+    minutes = {"1m": 1, "15m": 15, "1h": 60, "4h": 240}
+    largest = max(minutes[tf] for _, tf in analyses)
+    tolerance = pd.Timedelta(minutes=largest * args.tolerance)
+
+    scores = score(labels, analyses, tolerance)
+    print(
+        f"scored {len(labels)} labels over {len(analyses)} "
+        f"day/timeframe combinations, tolerance {tolerance}\n"
+    )
+    print(report(scores))
+    return 0 if all(item.passes for item in scores) else 1
 
 
 def cmd_demo(args: argparse.Namespace) -> int:
@@ -183,6 +263,7 @@ def build_parser() -> argparse.ArgumentParser:
     gaps.add_argument("parquet")
     gaps.add_argument("--minimum", default="10min")
     gaps.add_argument("--limit", type=int, default=25)
+    gaps.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
     gaps.set_defaults(func=cmd_gaps)
 
     plot = sub.add_parser("plot", help="annotate one day across the timeframe stack")
@@ -191,6 +272,7 @@ def build_parser() -> argparse.ArgumentParser:
     plot.add_argument("--timeframes", nargs="*", choices=list(TIMEFRAMES))
     plot.add_argument("--context-days", type=int, default=10)
     plot.add_argument("--out", default="charts")
+    plot.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
     plot.set_defaults(func=cmd_plot)
 
     sample = sub.add_parser("sample", help="export random charts for hand labelling")
@@ -199,7 +281,22 @@ def build_parser() -> argparse.ArgumentParser:
     sample.add_argument("--timeframe", default="15m", choices=list(TIMEFRAMES))
     sample.add_argument("--seed", type=int, default=1)
     sample.add_argument("--out", default="verification")
+    sample.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
     sample.set_defaults(func=cmd_sample)
+
+    verify = sub.add_parser(
+        "verify", help="score hand labels against the detectors"
+    )
+    verify.add_argument("parquet")
+    verify.add_argument("--labels", required=True)
+    verify.add_argument(
+        "--tolerance",
+        type=int,
+        default=DEFAULT_TOLERANCE_CANDLES,
+        help="how many candles apart a label and a detection may sit",
+    )
+    verify.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
+    verify.set_defaults(func=cmd_verify)
 
     demo = sub.add_parser("demo", help="generate synthetic candles to exercise the tools")
     demo.add_argument("--days", type=int, default=5)
