@@ -30,6 +30,7 @@ def _scanner(candles: pd.DataFrame) -> PriceScanner:
     )
 
 POOL_COLUMNS = (
+    "cluster",
     "price",
     "side",
     "created_at",
@@ -43,6 +44,7 @@ SWEEP_COLUMNS = ("time", "pool_price", "side", "extreme", "closed_back_at")
 def _empty_pools() -> pd.DataFrame:
     return pd.DataFrame(
         {
+            "cluster": pd.Series(dtype="int64"),
             "price": pd.Series(dtype="float64"),
             "side": pd.Series(dtype="object"),
             "created_at": pd.Series(dtype="datetime64[ns, UTC]"),
@@ -76,6 +78,18 @@ def find_pools(
     ``side`` is ``"buy"`` for pools above price (swing highs, where buy stops
     rest) and ``"sell"`` for pools below. ``is_equal_highs`` marks a pool built
     from more than one swing, which is the stronger draw.
+
+    One row is emitted per *state* of a pool, not per pool. When a later swing
+    joins a cluster the pool gets wider and gains a touch, so a new row is
+    emitted with that swing's confirmation as its ``created_at``; earlier rows
+    for the same ``cluster`` stay as they were.
+
+    That versioning is what makes the output safe to read at a point in time.
+    Carrying one mutable row per cluster would push its ``created_at`` forward
+    every time it was extended, so a pool formed in March and extended in April
+    would look, to any "what did I know then" filter, as though it did not
+    exist in March. Use :func:`unswept` to collapse the versions back to the
+    state that held at a given moment.
     """
     config = config or LiquidityConfig()
     if swings is None:
@@ -113,14 +127,14 @@ def find_pools(
                 None,
             )
             if match is None:
-                open_pools.append(
-                    {
-                        "price": float(swing["price"]),
-                        "side": side,
-                        "created_at": swing["confirmed_at"],
-                        "touches": 1,
-                    }
-                )
+                match = {
+                    "cluster": len(rows) + len(open_pools),
+                    "price": float(swing["price"]),
+                    "side": side,
+                    "created_at": swing["confirmed_at"],
+                    "touches": 1,
+                }
+                open_pools.append(match)
             else:
                 # The pool sits at the extreme of its members: that is the
                 # price the stops are actually beyond.
@@ -131,7 +145,9 @@ def find_pools(
                 )
                 match["touches"] += 1
                 match["created_at"] = swing["confirmed_at"]
-        rows.extend(open_pools)
+            # Snapshot the pool as it now stands. Earlier snapshots keep their
+            # own created_at, so the history stays readable at any point.
+            rows.append(dict(match))
 
     if not rows:
         return _empty_pools()
@@ -160,14 +176,20 @@ def _first_violation(candles: pd.DataFrame, pools: pd.DataFrame) -> pd.Series:
 def unswept(pools: pd.DataFrame, now: pd.Timestamp) -> pd.DataFrame:
     """Pools that exist at ``now`` and have not yet been taken.
 
-    This is what the draw on liquidity is chosen from.
+    This is what the draw on liquidity is chosen from. Because `find_pools`
+    emits one row per state, this also collapses each cluster to the newest
+    state that had been reached by ``now``: the pool as it actually stood.
     """
     now = pd.Timestamp(now)
     if pools.empty:
         return pools
     existing = pools["created_at"] <= now
     intact = pools["swept_at"].isna() | (pools["swept_at"] > now)
-    return pools.loc[existing & intact].reset_index(drop=True)
+    live = pools.loc[existing & intact]
+    if live.empty or "cluster" not in live.columns:
+        return live.reset_index(drop=True)
+    newest = live.sort_values("created_at").groupby("cluster", as_index=False).last()
+    return newest.reset_index(drop=True)[list(POOL_COLUMNS)]
 
 
 def find_sweeps(
@@ -229,6 +251,9 @@ def find_sweeps(
         return _empty_sweeps()
     return (
         pd.DataFrame(rows)
+        # Successive states of one cluster can describe the same breach, so
+        # the same sweep is only reported once.
+        .drop_duplicates(subset=["time", "side", "pool_price"])
         .sort_values("time")
         .reset_index(drop=True)[list(SWEEP_COLUMNS)]
     )

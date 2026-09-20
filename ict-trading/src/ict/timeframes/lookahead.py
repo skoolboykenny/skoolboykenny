@@ -43,6 +43,35 @@ def last_closed(
     return closed.iloc[-1]
 
 
+def knowable_at(
+    events: pd.DataFrame,
+    timeframe: str,
+    now: pd.Timestamp,
+    column: str = "time",
+) -> pd.DataFrame:
+    """Events from ``timeframe`` that could already be known at ``now``.
+
+    Running a detector over a whole series and then filtering is far cheaper
+    than re-running it on a truncated series at every bar, but it is only
+    equivalent if the filter is right. An event timed at candle ``X`` on a 15
+    minute timeframe is not knowable at ``X``: that candle is still forming.
+    It becomes knowable when the candle closes, at ``X + 15m``.
+
+    Use this for any detector output whose fields look backward only. Fields
+    computed from later data, such as a pool's ``swept_at`` or a gap's
+    ``mitigated_at``, are not made safe by this filter, and have their own
+    point in time accessors (:func:`~ict.detectors.liquidity.unswept`,
+    :func:`~ict.detectors.fvg.unmitigated`).
+    """
+    if events.empty:
+        return events
+    now = pd.Timestamp(now)
+    if now.tz is None:
+        raise ValueError("`now` must be timezone aware")
+    closes = pd.DatetimeIndex(events[column]) + timeframe_delta(timeframe)
+    return events.loc[closes <= now]
+
+
 @dataclass
 class TimeframeStack:
     """A 4h/1h/15m/1m stack that can only ever be read as at a point in time.

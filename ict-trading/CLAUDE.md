@@ -84,9 +84,28 @@ machine that can reach `datafeed.dukascopy.com`; see `DATA.md`.
 
 Do not start Phase 2 before the gate passes.
 
+## Phase 2: Silver Bullet backtest
+
+Started at the owner's instruction before the Phase 1 gate passed. The
+machinery is built and tested; the numbers it produces are not yet meaningful.
+
+Built: `src/ict/backtest/` with an event driven engine, a simulated broker, a
+cost model, the risk limits from the project record, the Silver Bullet strategy
+and a results report against the four pass criteria. `ict backtest` runs it.
+
+The engine is pessimistic where a candle is ambiguous, refuses to fill an order
+on the candle it was placed from, slips stops but not targets, and is covered
+by a property test that re-runs the whole backtest on truncated data and
+asserts finished trades do not change. That test caught two real lookahead
+bugs, one of them in the Phase 1 pool detector.
+
+**Still true: the detectors have not passed the 90% gate and nothing has run on
+real data.** The report states this on every run unless `--verified` is passed.
+Do not act on a result until `ict verify` passes on real data.
+
 ## Later phases (do not build yet)
 
-2. Silver Bullet backtest with spread, commission and slippage.
+2. Silver Bullet backtest with spread, commission and slippage. (In progress.)
 3. Remaining models: 2022 model, OTE, Power of Three, Judas swing, Turtle Soup,
    sweep to sweep.
 4. News module (calendar gate, directional and spike correction playbooks) and
