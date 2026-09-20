@@ -116,6 +116,12 @@ argued from spread rather than fitted. The Silver Bullet was resting orders at
 already mitigated gaps in 82% of its setups and now filters with
 `unmitigated(gaps, now)`.
 
+Structure points now need prominence too: break of structure fired 17.2 times
+a day because every fractal counted, and is now 7.6. MSS uses a separate,
+lower prominence (6 against 12) because it breaks a short term swing rather
+than a major one; that setting is the least certain in the project and should
+be revisited first against hand labels.
+
 **Still true: the detectors have not passed the 90% gate and nothing has run on
 real data.** The report states this on every run unless `--verified` is passed.
 Do not act on a result until `ict verify` passes on real data.

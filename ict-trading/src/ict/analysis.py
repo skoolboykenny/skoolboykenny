@@ -71,7 +71,7 @@ def analyse(
     )
     sweeps = find_sweeps(candles, pools=pools, config=config.liquidity)
     displacements = find_displacements(candles, config.displacement)
-    breaks = find_breaks_of_structure(candles, swings=swings)
+    breaks = find_breaks_of_structure(candles, swings=swings, config=config.structure)
     shifts = find_market_structure_shifts(
         candles,
         sweeps=sweeps,
@@ -81,7 +81,11 @@ def analyse(
     )
     fvgs = find_fvgs(candles, config.fvg)
     order_blocks = find_order_blocks(
-        candles, breaks=breaks, config=config.order_block, displacement=config.displacement
+        candles,
+        breaks=breaks,
+        config=config.order_block,
+        displacement=config.displacement,
+        structure=config.structure,
     )
     levels = session_levels(candles) if with_levels else pd.DataFrame()
 

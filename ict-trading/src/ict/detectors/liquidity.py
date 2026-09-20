@@ -19,7 +19,7 @@ import pandas as pd
 from ..config import DisplacementConfig, LiquidityConfig
 from ._scan import NOT_FOUND, PriceScanner
 from .atr import atr
-from .swings import find_swings
+from .swings import find_swings, prominent
 
 
 def _scanner(candles: pd.DataFrame) -> PriceScanner:
@@ -65,37 +65,6 @@ def _empty_sweeps() -> pd.DataFrame:
             "closed_back_at": pd.Series(dtype="datetime64[ns, UTC]"),
         }
     )
-
-
-def prominent(
-    candles: pd.DataFrame, swings: pd.DataFrame, lookback: int
-) -> pd.DataFrame:
-    """Keep only swings that are the extreme of the ``lookback`` before them.
-
-    A swing high two candles wide is a local wiggle. Liquidity rests above a
-    high that stood out, so a pool needs the swing to be the highest point of
-    a meaningful stretch of chart, not just of its two neighbours.
-    """
-    if lookback <= 0 or swings.empty:
-        return swings
-
-    highs = candles["high"]
-    lows = candles["low"]
-    prior_high = highs.rolling(lookback, min_periods=1).max().shift(1)
-    prior_low = lows.rolling(lookback, min_periods=1).min().shift(1)
-
-    ceiling = prior_high.reindex(swings["time"]).to_numpy()
-    floor = prior_low.reindex(swings["time"]).to_numpy()
-    prices = swings["price"].to_numpy()
-    is_high = (swings["kind"] == "high").to_numpy()
-
-    # NaN ceiling means nothing came before it, which cannot be ruled out.
-    keep = np.where(
-        is_high,
-        ~(prices <= ceiling),
-        ~(prices >= floor),
-    )
-    return swings.loc[keep].reset_index(drop=True)
 
 
 def find_pools(
