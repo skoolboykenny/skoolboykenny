@@ -245,6 +245,28 @@ definition, not fitted.** They have never been checked against a hand marked
 chart, and tuning them on anything but real data would be fitting to noise.
 Re-tune them against `ict verify` before trusting any backtest.
 
+### What counts as structure
+
+`StructureConfig.prominence_lookback` (12) decides which swings are structure
+points at all. Without it every two bar fractal counts, and since nearly every
+swing is eventually closed beyond, **break of structure fired 17.2 times a day**
+on a 15 minute chart in the test data. That is not a signal, it is a
+restatement of "price moved".
+
+With it, breaks fall to 7.6 a day and order blocks, which are built on breaks,
+from 0.32 to 0.20 a day.
+
+`mss_prominence_lookback` (6) is deliberately separate and lower. A break of
+structure confirms a trend and should break a level the trend is built on; a
+shift reverses one, and ICT reads it against the last opposing *short term*
+swing. Holding both to the same standard took market structure shifts from 8 to
+2 in sixty days, which is stricter than the concept describes.
+
+**This is the least certain setting in the project.** Market structure shifts
+are already rare on generated data because displacement is, so the counts here
+cannot distinguish a good value from a bad one. Revisit it first against hand
+labels.
+
 ### Fair value gaps: size, and gaps that are already spent
 
 `min_gap_atr` defaults to 0.20, derived from cost rather than fitted. On

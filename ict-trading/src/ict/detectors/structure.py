@@ -20,7 +20,7 @@ import pandas as pd
 from ..config import DisplacementConfig, StructureConfig
 from ._scan import NOT_FOUND, PriceScanner
 from .displacement import displacement_mask
-from .swings import find_swings
+from .swings import find_swings, prominent
 
 BOS_COLUMNS = ("time", "direction", "level", "swing_time")
 MSS_COLUMNS = ("time", "direction", "level", "swing_time", "sweep_time", "sweep_side")
@@ -39,15 +39,23 @@ def _empty(columns: tuple[str, ...]) -> pd.DataFrame:
 
 
 def find_breaks_of_structure(
-    candles: pd.DataFrame, swings: pd.DataFrame | None = None
+    candles: pd.DataFrame,
+    swings: pd.DataFrame | None = None,
+    config: StructureConfig | None = None,
 ) -> pd.DataFrame:
-    """Detect closes beyond the most recently confirmed swing.
+    """Detect closes beyond the most recently confirmed structure point.
 
     Each swing can only be broken once; after that it is history and the next
     swing takes over as the level to watch.
+
+    Only prominent swings count. Treating every two bar fractal as structure
+    makes a break of structure almost meaningless, because nearly every swing
+    is eventually closed beyond.
     """
+    config = config or StructureConfig()
     if swings is None:
         swings = find_swings(candles)
+    swings = prominent(candles, swings, config.prominence_lookback)
     if swings.empty or candles.empty:
         return _empty(BOS_COLUMNS)
 
@@ -108,6 +116,10 @@ def find_market_structure_shifts(
     displacement = displacement or DisplacementConfig()
     if swings is None:
         swings = find_swings(candles)
+    # The level a shift breaks has to stand out, but less than a break of
+    # structure does: a shift reverses a trend against the last opposing short
+    # term swing rather than confirming it against a major one.
+    swings = prominent(candles, swings, config.mss_prominence_lookback)
     if sweeps.empty or swings.empty or candles.empty:
         return _empty(MSS_COLUMNS)
 
