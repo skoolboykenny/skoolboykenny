@@ -1,8 +1,16 @@
 """Swing highs and lows: the fractal points everything else is anchored to.
 
-A swing high at candle ``i`` is a high strictly greater than the highs of the
-``n`` candles either side. Ties do not count, which keeps flat, ranging price
-from producing a swing on every candle.
+A swing high at candle ``i`` is a high at least as great as the ``n`` candles
+before it and strictly greater than the ``n`` after. The asymmetry is what
+makes a run of equal highs one swing, at its last candle, rather than none at
+all or one per bar.
+
+Demanding a strictly lower neighbour on both sides looks tidier and is wrong on
+real data. Feeds quote to a fixed number of decimals, so adjacent candles share
+an exact high often: on test data quantised the way USD/JPY and tick sized
+futures quote, the strict rule found 336 swings where the same data as raw
+floats gave 6,092. Equal highs are also the liquidity pattern ICT cares most
+about, so discarding them is the opposite of what the detector is for.
 
 A swing is only *confirmed* ``n`` candles after it forms, because that is when
 the right-hand side exists. The confirmation time is recorded separately from
@@ -55,14 +63,21 @@ def find_swings(
     is_high[:n] = is_high[-n:] = False
     is_low[:n] = is_low[-n:] = False
 
+    # Equal on the left, strictly beyond on the right. A run of candles
+    # sharing the same high is then one swing, marked at its last candle, and
+    # a flat stretch does not produce a swing on every bar.
     for offset in range(1, n + 1):
         left_high = np.roll(highs, offset)
         right_high = np.roll(highs, -offset)
-        is_high &= (highs > left_high) & (highs > right_high)
-
         left_low = np.roll(lows, offset)
         right_low = np.roll(lows, -offset)
-        is_low &= (lows < left_low) & (lows < right_low)
+
+        if config.allow_plateaus:
+            is_high &= (highs >= left_high) & (highs > right_high)
+            is_low &= (lows <= left_low) & (lows < right_low)
+        else:
+            is_high &= (highs > left_high) & (highs > right_high)
+            is_low &= (lows < left_low) & (lows < right_low)
 
     rows = []
     for positions, kind, prices in ((is_high, "high", highs), (is_low, "low", lows)):
