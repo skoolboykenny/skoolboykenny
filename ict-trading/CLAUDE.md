@@ -111,6 +111,11 @@ no fat tails. Lowering it there would calibrate to noise. Only a definitional
 fix was made, allowing displacement to come from any candle in the leg between
 the sweep and the break rather than the breaking candle alone.
 
+The FVG size threshold was inert (0.05 ATR rejected nothing) and is now 0.20,
+argued from spread rather than fitted. The Silver Bullet was resting orders at
+already mitigated gaps in 82% of its setups and now filters with
+`unmitigated(gaps, now)`.
+
 **Still true: the detectors have not passed the 90% gate and nothing has run on
 real data.** The report states this on every run unless `--verified` is passed.
 Do not act on a result until `ict verify` passes on real data.

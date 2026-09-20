@@ -245,6 +245,29 @@ definition, not fitted.** They have never been checked against a hand marked
 chart, and tuning them on anything but real data would be fitting to noise.
 Re-tune them against `ict verify` before trusting any backtest.
 
+### Fair value gaps: size, and gaps that are already spent
+
+`min_gap_atr` defaults to 0.20, derived from cost rather than fitted. On
+EUR/USD a 15 minute ATR runs around 0.0010 against a spread near 0.00012, so
+the spread alone is about 0.12 ATR and a gap narrower than roughly twice that
+cannot be entered profitably however good it looks. Recompute it per instrument
+from real spread data.
+
+The previous default of 0.05 was **inert**: no gap in sixty days of test data
+fell below it, so the detector had no working size filter at all.
+
+Worth checking on real data: **38% of detected gaps were filled within one
+candle** and 51% within two. A gap price trades straight back into was never an
+imbalance. If that holds on EUR/USD, the three candle definition is catching
+wick artefacts and needs a survival requirement, which has to be designed
+carefully so the gap's knowable time moves with it rather than leaking the
+future.
+
+A mitigated gap is spent. Anything selecting a gap to trade must filter with
+`unmitigated(gaps, now)`, not just take the most recent one: resting a limit
+order at a level price has already been through and left is waiting for an
+imbalance that no longer exists.
+
 ### A warning about the displacement threshold
 
 **Do not tune `DisplacementConfig` against synthetic data.** Measured over 60

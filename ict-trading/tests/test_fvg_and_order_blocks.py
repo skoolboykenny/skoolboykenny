@@ -127,3 +127,26 @@ def test_no_order_block_without_a_structure_break():
     ]
     candles = make_candles(rows)
     assert find_order_blocks(candles).empty
+
+
+def test_the_size_threshold_actually_filters():
+    """The old default of 0.05 ATR rejected nothing at all.
+
+    A threshold no gap ever falls below is not a filter, it is decoration.
+    This pins that the default rejects a gap narrower than the spread it
+    would have to be entered through.
+    """
+    from ict.config import FVGConfig as _FVGConfig
+
+    assert _FVGConfig().min_gap_atr >= 0.15
+
+    rows = _quiet(20) + [
+        (100.0, 100.2, 99.8, 100.1),
+        (100.1, 100.5, 100.0, 100.4),
+        (100.4, 100.7, 100.25, 100.6),  # a 0.05 wide gap on a ~0.4 ATR
+    ]
+    candles = make_candles(rows)
+
+    assert not find_fvgs(candles, FVGConfig(min_gap_atr=0.0)).empty
+    # Too narrow to trade once the spread is paid.
+    assert find_fvgs(candles, FVGConfig()).empty

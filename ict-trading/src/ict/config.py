@@ -83,7 +83,17 @@ class StructureConfig:
 @dataclass(frozen=True)
 class FVGConfig:
     #: Gap must be at least this multiple of ATR to be worth recording.
-    min_gap_atr: float = 0.05
+    #:
+    #: Derived from cost, not fitted. A gap has to be wide enough to enter
+    #: inside and still clear the spread: on EUR/USD a 15 minute ATR runs
+    #: around 0.0010 against a spread near 0.00012, so the spread alone is
+    #: about 0.12 ATR and anything under roughly twice that cannot be traded
+    #: profitably whatever it looks like on the chart. Recompute it per
+    #: instrument from real spread data rather than carrying this number over.
+    #:
+    #: The previous default of 0.05 was inert: no gap in sixty days of test
+    #: data fell below it, so the detector had no working size filter at all.
+    min_gap_atr: float = 0.20
     atr_period: int = 14
 
 
