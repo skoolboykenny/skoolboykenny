@@ -10,7 +10,10 @@ from .costs import CostModel
 from .engine import BacktestResult, run
 from .report import Metrics, measure, report
 from .risk import RiskConfig, RiskManager, position_size
-from .silver_bullet import SilverBullet, SilverBulletConfig
+from .walkforward import WalkForward, grid, rank, walk_forward
+from .walkforward import report as walk_forward_report
+from .models import MODELS, BaseModel, ModelConfig
+from .strategy import Context, Setup, Strategy, build_context
 
 __all__ = [
     "BacktestResult",
@@ -21,11 +24,21 @@ __all__ = [
     "Position",
     "RiskConfig",
     "RiskManager",
-    "SilverBullet",
-    "SilverBulletConfig",
+    "MODELS",
+    "BaseModel",
+    "Context",
+    "ModelConfig",
+    "Setup",
+    "Strategy",
+    "build_context",
     "Trade",
     "measure",
+    "WalkForward",
+    "grid",
     "position_size",
+    "rank",
+    "walk_forward",
+    "walk_forward_report",
     "report",
     "run",
 ]

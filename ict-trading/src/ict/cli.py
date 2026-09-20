@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import argparse
 import random
 import sys
@@ -25,7 +26,12 @@ from .data.loader import find_gaps, load_csvs, read_parquet, write_parquet
 from .plotting.charts import plot_analysis, write_html
 from .timeframes.lookahead import TimeframeStack
 from .timeframes.resample import TIMEFRAMES, resample
-from .backtest import CostModel, RiskConfig, SilverBulletConfig
+from .backtest import MODELS, CostModel, ModelConfig, RiskConfig
+from .backtest import grid as parameter_grid
+from .backtest import rank as rank_models
+from .backtest import walk_forward
+from .backtest import walk_forward_report
+from .backtest.strategy import build_context
 from .backtest import measure as measure_backtest
 from .backtest import report as backtest_report
 from .backtest import run as run_backtest
@@ -55,6 +61,70 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         return 1
     path = write_parquet(candles, args.out)
     print(f"wrote {path}")
+    return 0
+
+
+def cmd_fetch(args: argparse.Namespace) -> int:
+    """Download candles from OANDA into the Parquet store."""
+    from .data.oanda import OandaClient, OandaError, combine, download
+
+    try:
+        client = OandaClient()
+    except OandaError as error:
+        print(error, file=sys.stderr)
+        return 2
+
+    start = pd.Timestamp(args.start, tz="UTC")
+    end = (
+        pd.Timestamp(args.end, tz="UTC")
+        if args.end
+        else pd.Timestamp.now(tz="UTC").floor("min")
+    )
+    if end <= start:
+        print("--end must be after --start", file=sys.stderr)
+        return 1
+
+    chunks = Path(args.chunks or Path(args.out).parent / "chunks")
+    print(
+        f"{args.instrument} {args.granularity} from {start:%Y-%m-%d} to "
+        f"{end:%Y-%m-%d}, {client.credentials.environment} environment"
+    )
+    if client.credentials.is_live:
+        print("Using the LIVE host. Downloading is read only, but check the token.")
+
+    def progress(path: Path, rows: int | None) -> None:
+        if rows is None:
+            print(f"  {path.name}: already downloaded")
+        elif rows == 0:
+            print(f"  {path.name}: no candles in range")
+        else:
+            print(f"  {path.name}: {rows:,} candles")
+
+    try:
+        paths = download(
+            args.instrument, start, end, chunks,
+            client=client, granularity=args.granularity, on_progress=progress,
+        )
+    except OandaError as error:
+        print(f"\ndownload failed: {error}", file=sys.stderr)
+        print("Chunks already written are kept, so rerunning resumes.", file=sys.stderr)
+        return 1
+
+    frame = combine(paths)
+    if frame.empty:
+        print("no candles downloaded", file=sys.stderr)
+        return 1
+
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    frame.to_parquet(out, engine="pyarrow", index=True)
+    print(
+        f"\nwrote {len(frame):,} candles to {out}\n"
+        f"  span    {frame.index[0]} to {frame.index[-1]}\n"
+        f"  spread  median {frame['spread'].median():.6f}, "
+        f"95th {frame['spread'].quantile(0.95):.6f}"
+    )
+    print("\nNext: `ict gaps` to check for holes, then `ict sample` to start labelling.")
     return 0
 
 
@@ -254,8 +324,30 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0 if all(item.passes for item in scores) else 1
 
 
+def _configured_model(args: argparse.Namespace):
+    """Build the chosen model, keeping its own window defaults.
+
+    Each model knows which sessions it trades, so the CLI overrides only what
+    was asked for rather than handing it a blank config.
+    """
+    from dataclasses import replace
+
+    from .backtest.strategy import build_context
+
+    def factory(context):
+        model = MODELS[args.model](context)
+        model.config = replace(
+            model.config,
+            minimum_r=args.minimum_r,
+            order_life_minutes=args.order_life,
+        )
+        return model
+
+    return factory
+
+
 def cmd_backtest(args: argparse.Namespace) -> int:
-    """Run the Silver Bullet over a date range and report the result."""
+    """Run one ICT model over a date range and report the result."""
     candles = read_parquet(args.parquet, side=args.side)
     if args.start:
         candles = candles.loc[candles.index >= pd.Timestamp(args.start, tz="UTC")]
@@ -273,11 +365,7 @@ def cmd_backtest(args: argparse.Namespace) -> int:
             commission=args.commission,
         ),
         risk=RiskConfig(risk_per_trade=args.risk),
-        strategy_config=SilverBulletConfig(
-            minimum_r=args.minimum_r,
-            draw_timeframe=args.draw_timeframe,
-            order_life_minutes=args.order_life,
-        ),
+        strategy=_configured_model(args),
         starting_equity=args.equity,
     )
     metrics = measure_backtest(result)
@@ -297,6 +385,160 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         print(f"\nwrote the trade journal to {path}")
 
     return 0 if metrics.passes else 1
+
+
+def cmd_rank(args: argparse.Namespace) -> int:
+    """Walk forward every model and rank them on out of sample expectancy."""
+    candles = read_parquet(args.parquet, side=args.side)
+    if args.start:
+        candles = candles.loc[candles.index >= pd.Timestamp(args.start, tz="UTC")]
+    if args.end:
+        candles = candles.loc[candles.index <= pd.Timestamp(args.end, tz="UTC")]
+    if candles.empty:
+        print("no candles in that range", file=sys.stderr)
+        return 1
+
+    models = args.models or sorted(MODELS)
+    parameters = parameter_grid(
+        minimum_r=args.minimum_r, stop_buffer=args.stop_buffer
+    )
+    print(
+        f"{len(models)} models, {len(parameters)} parameter combinations each, "
+        f"tune {args.train_days} days and test {args.test_days}\n"
+    )
+
+    # One analysis, shared by every model and every fold.
+    context = build_context(candles)
+    results = []
+    for name in models:
+        print(f"  walking {name} ...", flush=True)
+        results.append(
+            walk_forward(
+                candles,
+                model=name,
+                parameters=parameters,
+                train_days=args.train_days,
+                test_days=args.test_days,
+                context=context,
+            )
+        )
+
+    table = rank_models(results)
+    print()
+    print(walk_forward_report(table, args.train_days, args.test_days))
+
+    if args.out:
+        path = Path(args.out)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        table.to_csv(path, index=False)
+        print(f"\nwrote the ranking to {path}")
+    return 0
+
+
+def cmd_robustness(args: argparse.Namespace) -> int:
+    """Gate 4: parameter sensitivity and Monte Carlo on one model."""
+    from .backtest.robustness import monte_carlo, report as robustness_report, sensitivity
+
+    candles = read_parquet(args.parquet, side=args.side)
+    if args.start:
+        candles = candles.loc[candles.index >= pd.Timestamp(args.start, tz="UTC")]
+    if args.end:
+        candles = candles.loc[candles.index <= pd.Timestamp(args.end, tz="UTC")]
+    if candles.empty:
+        print("no candles in that range", file=sys.stderr)
+        return 1
+
+    context = build_context(candles)
+    # Start from the model's own defaults, which carry its windows and any
+    # settings particular to it, then apply the overrides given here.
+    baseline = replace(
+        MODELS[args.model](context).config,
+        minimum_r=args.minimum_r,
+        stop_buffer=args.stop_buffer,
+        order_life_minutes=args.order_life,
+    )
+
+    sense = sensitivity(
+        candles, model=args.model, baseline=baseline, context=context
+    )
+    result = run_backtest(
+        candles, strategy=args.model, strategy_config=baseline, context=context
+    )
+    carlo = monte_carlo(
+        result.trades, samples=args.samples, ruin_threshold=args.ruin_threshold
+    )
+
+    print(robustness_report(sense, carlo, args.model))
+    if not args.verified:
+        print(
+            "\nThe detectors have not passed the 90% gate and this may not be "
+            "real data.\nRobustness of an unverified result is robustness of a bug."
+        )
+    # Both tests must pass for the gate to pass.
+    return 0 if (sense.passes() and carlo.passes()) else 1
+
+
+def cmd_live(args: argparse.Namespace) -> int:
+    """Paper or live trade one model. Dry run unless --execute is passed."""
+    import logging
+
+    from .data.oanda import OandaClient, OandaError
+    from .live import Guards, LiveBroker, LiveRunner
+
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)-7s %(message)s"
+    )
+
+    try:
+        client = OandaClient()
+    except OandaError as error:
+        print(error, file=sys.stderr)
+        return 2
+
+    if args.execute and client.credentials.is_live and not args.i_understand:
+        print(
+            "Refusing to trade the LIVE environment without --i-understand.\n"
+            "The project's own gates require 3 months of paper trading first.",
+            file=sys.stderr,
+        )
+        return 2
+
+    history = read_parquet(args.parquet, side=args.side)
+    if history.empty:
+        print("the runner needs history, and that file is empty", file=sys.stderr)
+        return 1
+    history = history.tail(args.history_candles)
+
+    broker = LiveBroker(client, args.instrument)
+    runner = LiveRunner(
+        broker=broker,
+        history=history,
+        model=args.model,
+        overrides={"minimum_r": args.minimum_r} if args.minimum_r else None,
+        risk=RiskConfig(risk_per_trade=args.risk_per_trade),
+        guards=Guards(
+            max_drawdown=args.max_drawdown,
+            max_consecutive_losses=args.max_consecutive_losses,
+        ),
+        dry_run=not args.execute,
+    )
+
+    if not args.execute:
+        print("DRY RUN: setups are logged, nothing is sent. Pass --execute to trade.")
+    print(
+        f"history {len(history):,} candles to {history.index[-1]}\n"
+        f"model {args.model}, {client.credentials.environment} environment\n"
+        f"halt at {args.max_drawdown:.0%} drawdown or "
+        f"{args.max_consecutive_losses} losses in a row\n"
+    )
+
+    halt = runner.run()
+    if halt:
+        print(f"\n{halt}", file=sys.stderr)
+        print("A halt is final. Check the account by hand before restarting.",
+              file=sys.stderr)
+        return 1
+    return 0
 
 
 def cmd_demo(args: argparse.Namespace) -> int:
@@ -343,6 +585,17 @@ def build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--source", default="histdata", choices=["histdata", "dukascopy"])
     ingest.add_argument("--out", required=True)
     ingest.set_defaults(func=cmd_ingest)
+
+    fetch = sub.add_parser(
+        "fetch", help="download candles from OANDA (needs OANDA_API_TOKEN)"
+    )
+    fetch.add_argument("--instrument", default="EUR_USD")
+    fetch.add_argument("--start", required=True, help="YYYY-MM-DD")
+    fetch.add_argument("--end", default=None, help="YYYY-MM-DD, default now")
+    fetch.add_argument("--granularity", default="M1", choices=["M1", "M15", "H1", "H4"])
+    fetch.add_argument("--out", required=True)
+    fetch.add_argument("--chunks", default=None, help="where monthly chunks go")
+    fetch.set_defaults(func=cmd_fetch)
 
     gaps = sub.add_parser("gaps", help="report gaps in a stored series")
     gaps.add_argument("parquet")
@@ -396,6 +649,9 @@ def build_parser() -> argparse.ArgumentParser:
     backtest.add_argument("--to", dest="end", default=None)
     backtest.add_argument("--equity", type=float, default=10_000.0)
     backtest.add_argument("--risk", type=float, default=0.005)
+    backtest.add_argument(
+        "--model", default="silver_bullet", choices=sorted(MODELS)
+    )
     backtest.add_argument("--minimum-r", type=float, default=2.0)
     backtest.add_argument("--order-life", type=int, default=20)
     backtest.add_argument(
@@ -418,6 +674,61 @@ def build_parser() -> argparse.ArgumentParser:
     )
     backtest.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
     backtest.set_defaults(func=cmd_backtest)
+
+    rank = sub.add_parser(
+        "rank", help="walk forward every model and rank them out of sample"
+    )
+    rank.add_argument("parquet")
+    rank.add_argument("--from", dest="start", default=None)
+    rank.add_argument("--to", dest="end", default=None)
+    rank.add_argument("--models", nargs="*", choices=sorted(MODELS), default=None)
+    rank.add_argument("--train-days", type=int, default=120)
+    rank.add_argument("--test-days", type=int, default=30)
+    rank.add_argument("--minimum-r", type=float, nargs="*", default=[1.5, 2.0])
+    rank.add_argument("--stop-buffer", type=float, nargs="*", default=[0.1, 0.25])
+    rank.add_argument("--out", default=None, help="write the ranking to CSV")
+    rank.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
+    rank.set_defaults(func=cmd_rank)
+
+    robust = sub.add_parser(
+        "robustness", help="gate 4: parameter sensitivity and Monte Carlo"
+    )
+    robust.add_argument("parquet")
+    robust.add_argument("--model", default="silver_bullet", choices=sorted(MODELS))
+    robust.add_argument("--start", default=None)
+    robust.add_argument("--end", default=None)
+    robust.add_argument("--minimum-r", type=float, default=2.0)
+    robust.add_argument("--stop-buffer", type=float, default=0.1)
+    robust.add_argument("--order-life", type=int, default=20)
+    robust.add_argument("--samples", type=int, default=2000)
+    robust.add_argument("--ruin-threshold", type=float, default=0.30)
+    robust.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
+    robust.add_argument("--verified", action="store_true")
+    robust.set_defaults(func=cmd_robustness)
+
+    live = sub.add_parser(
+        "live", help="paper or live trade one model (dry run by default)"
+    )
+    live.add_argument("parquet", help="history the detectors start from")
+    live.add_argument("--instrument", default="EUR_USD")
+    live.add_argument("--model", default="silver_bullet", choices=sorted(MODELS))
+    live.add_argument("--history-candles", type=int, default=200_000)
+    live.add_argument("--risk-per-trade", type=float, default=0.005)
+    live.add_argument(
+        "--minimum-r", type=float, default=None,
+        help="override the model's minimum reward to risk",
+    )
+    live.add_argument("--max-drawdown", type=float, default=0.15)
+    live.add_argument("--max-consecutive-losses", type=int, default=8)
+    live.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
+    live.add_argument(
+        "--execute", action="store_true", help="actually send orders"
+    )
+    live.add_argument(
+        "--i-understand", action="store_true",
+        help="required to --execute against the live environment",
+    )
+    live.set_defaults(func=cmd_live)
 
     demo = sub.add_parser("demo", help="generate synthetic candles to exercise the tools")
     demo.add_argument("--days", type=int, default=5)

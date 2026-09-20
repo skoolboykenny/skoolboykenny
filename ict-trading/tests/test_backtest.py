@@ -513,15 +513,14 @@ def test_the_strategy_never_rests_an_order_at_a_spent_gap():
     longer exists. Before this was enforced, 82% of setups on the test data
     were built on gaps that had already been mitigated.
     """
-    from ict.analysis import analyse
-    from ict.backtest.silver_bullet import SilverBullet
+    from ict.backtest.models import SilverBulletModel
+    from ict.backtest.strategy import build_context
     from ict.detectors.fvg import unmitigated
-    from ict.timeframes.resample import resample
 
     candles = synthetic_candles(days=20)
-    entry = analyse(candles, "1m")
-    draw = analyse(resample(candles, "1h"), "1h")
-    strategy = SilverBullet(entry, draw)
+    context = build_context(candles)
+    entry = context.entry
+    strategy = SilverBulletModel(context)
 
     checked = 0
     for now in candles.index[::7]:
