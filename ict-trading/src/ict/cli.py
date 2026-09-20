@@ -25,7 +25,12 @@ from .data.loader import find_gaps, load_csvs, read_parquet, write_parquet
 from .plotting.charts import plot_analysis, write_html
 from .timeframes.lookahead import TimeframeStack
 from .timeframes.resample import TIMEFRAMES, resample
-from .backtest import CostModel, RiskConfig, SilverBulletConfig
+from .backtest import MODELS, CostModel, ModelConfig, RiskConfig
+from .backtest import grid as parameter_grid
+from .backtest import rank as rank_models
+from .backtest import walk_forward
+from .backtest import walk_forward_report
+from .backtest.strategy import build_context
 from .backtest import measure as measure_backtest
 from .backtest import report as backtest_report
 from .backtest import run as run_backtest
@@ -254,8 +259,30 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0 if all(item.passes for item in scores) else 1
 
 
+def _configured_model(args: argparse.Namespace):
+    """Build the chosen model, keeping its own window defaults.
+
+    Each model knows which sessions it trades, so the CLI overrides only what
+    was asked for rather than handing it a blank config.
+    """
+    from dataclasses import replace
+
+    from .backtest.strategy import build_context
+
+    def factory(context):
+        model = MODELS[args.model](context)
+        model.config = replace(
+            model.config,
+            minimum_r=args.minimum_r,
+            order_life_minutes=args.order_life,
+        )
+        return model
+
+    return factory
+
+
 def cmd_backtest(args: argparse.Namespace) -> int:
-    """Run the Silver Bullet over a date range and report the result."""
+    """Run one ICT model over a date range and report the result."""
     candles = read_parquet(args.parquet, side=args.side)
     if args.start:
         candles = candles.loc[candles.index >= pd.Timestamp(args.start, tz="UTC")]
@@ -273,11 +300,7 @@ def cmd_backtest(args: argparse.Namespace) -> int:
             commission=args.commission,
         ),
         risk=RiskConfig(risk_per_trade=args.risk),
-        strategy_config=SilverBulletConfig(
-            minimum_r=args.minimum_r,
-            draw_timeframe=args.draw_timeframe,
-            order_life_minutes=args.order_life,
-        ),
+        strategy=_configured_model(args),
         starting_equity=args.equity,
     )
     metrics = measure_backtest(result)
@@ -297,6 +320,54 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         print(f"\nwrote the trade journal to {path}")
 
     return 0 if metrics.passes else 1
+
+
+def cmd_rank(args: argparse.Namespace) -> int:
+    """Walk forward every model and rank them on out of sample expectancy."""
+    candles = read_parquet(args.parquet, side=args.side)
+    if args.start:
+        candles = candles.loc[candles.index >= pd.Timestamp(args.start, tz="UTC")]
+    if args.end:
+        candles = candles.loc[candles.index <= pd.Timestamp(args.end, tz="UTC")]
+    if candles.empty:
+        print("no candles in that range", file=sys.stderr)
+        return 1
+
+    models = args.models or sorted(MODELS)
+    parameters = parameter_grid(
+        minimum_r=args.minimum_r, stop_buffer=args.stop_buffer
+    )
+    print(
+        f"{len(models)} models, {len(parameters)} parameter combinations each, "
+        f"tune {args.train_days} days and test {args.test_days}\n"
+    )
+
+    # One analysis, shared by every model and every fold.
+    context = build_context(candles)
+    results = []
+    for name in models:
+        print(f"  walking {name} ...", flush=True)
+        results.append(
+            walk_forward(
+                candles,
+                model=name,
+                parameters=parameters,
+                train_days=args.train_days,
+                test_days=args.test_days,
+                context=context,
+            )
+        )
+
+    table = rank_models(results)
+    print()
+    print(walk_forward_report(table, args.train_days, args.test_days))
+
+    if args.out:
+        path = Path(args.out)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        table.to_csv(path, index=False)
+        print(f"\nwrote the ranking to {path}")
+    return 0
 
 
 def cmd_demo(args: argparse.Namespace) -> int:
@@ -396,6 +467,9 @@ def build_parser() -> argparse.ArgumentParser:
     backtest.add_argument("--to", dest="end", default=None)
     backtest.add_argument("--equity", type=float, default=10_000.0)
     backtest.add_argument("--risk", type=float, default=0.005)
+    backtest.add_argument(
+        "--model", default="silver_bullet", choices=sorted(MODELS)
+    )
     backtest.add_argument("--minimum-r", type=float, default=2.0)
     backtest.add_argument("--order-life", type=int, default=20)
     backtest.add_argument(
@@ -418,6 +492,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     backtest.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
     backtest.set_defaults(func=cmd_backtest)
+
+    rank = sub.add_parser(
+        "rank", help="walk forward every model and rank them out of sample"
+    )
+    rank.add_argument("parquet")
+    rank.add_argument("--from", dest="start", default=None)
+    rank.add_argument("--to", dest="end", default=None)
+    rank.add_argument("--models", nargs="*", choices=sorted(MODELS), default=None)
+    rank.add_argument("--train-days", type=int, default=120)
+    rank.add_argument("--test-days", type=int, default=30)
+    rank.add_argument("--minimum-r", type=float, nargs="*", default=[1.5, 2.0])
+    rank.add_argument("--stop-buffer", type=float, nargs="*", default=[0.1, 0.25])
+    rank.add_argument("--out", default=None, help="write the ranking to CSV")
+    rank.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
+    rank.set_defaults(func=cmd_rank)
 
     demo = sub.add_parser("demo", help="generate synthetic candles to exercise the tools")
     demo.add_argument("--days", type=int, default=5)
