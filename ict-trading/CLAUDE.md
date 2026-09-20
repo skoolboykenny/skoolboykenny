@@ -99,6 +99,9 @@ by a property test that re-runs the whole backtest on truncated data and
 asserts finished trades do not change. That test caught two real lookahead
 bugs, one of them in the Phase 1 pool detector.
 
+Sampling exports unmarked charts: the labelling chart must not show the
+detector's own answers, or anchoring inflates the score.
+
 **Still true: the detectors have not passed the 90% gate and nothing has run on
 real data.** The report states this on every run unless `--verified` is passed.
 Do not act on a result until `ict verify` passes on real data.
