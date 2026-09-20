@@ -129,6 +129,12 @@ identical on raw floats, so generated data cannot show this. Noted for real
 data: 57% of consecutive prominent swings share a kind rather than
 alternating.
 
+A full run over 200 days of generated data is written up in
+`docs/backtest-results.md`: profit factor 0.97, expectancy 0.014R, 81 trades,
+all four pass criteria failed. The detector work took it from 0.59 to 0.97,
+which means it stopped picking actively wrong rather than that it found an
+edge; 0.97 is the noise floor for a random walk after costs.
+
 **Still true: the detectors have not passed the 90% gate and nothing has run on
 real data.** The report states this on every run unless `--verified` is passed.
 Do not act on a result until `ict verify` passes on real data.
