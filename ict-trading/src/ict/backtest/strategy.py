@@ -12,15 +12,17 @@ the draw on liquidity, and the daily bias that follows from it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
+import numpy as np
 import pandas as pd
 
 from ..analysis import Analysis
 from ..detectors.fvg import unmitigated
 from ..detectors.liquidity import unswept
 from ..timeframes.lookahead import knowable_at
+from ..timeframes.resample import timeframe_delta
 
 
 @dataclass
@@ -76,9 +78,49 @@ class Context:
     entry_timeframe: str = "1m"
     draw_timeframe: str = "1h"
 
+    #: Cut points for :meth:`_knowable`, built on first use.
+    _cuts: dict = field(default_factory=dict, repr=False)
+
+    def _knowable(
+        self,
+        events: pd.DataFrame,
+        timeframe: str,
+        now: pd.Timestamp,
+        column: str = "time",
+    ) -> pd.DataFrame:
+        """:func:`knowable_at`, but without rescanning the frame every candle.
+
+        The guard keeps events whose close time is at or before ``now``. Close
+        times are event times plus a fixed timeframe delta, so when the events
+        are in time order the answer is always a prefix and a binary search
+        finds it. The engine asks this question several times per candle over
+        hundreds of thousands of candles, and the linear mask dominated the run.
+
+        Frames that are not in time order, which no detector currently
+        produces, fall back to the original filter.
+        """
+        if events.empty:
+            return events
+
+        key = (id(events), column)
+        closes = self._cuts.get(key)
+        if closes is None:
+            stamps = pd.DatetimeIndex(events[column]) + timeframe_delta(timeframe)
+            # Dropped to naive UTC because a tz aware index comes out of numpy
+            # as boxed Timestamps, which searchsorted cannot compare quickly.
+            values = stamps.tz_convert("UTC").tz_localize(None).to_numpy()
+            closes = values if pd.Index(values).is_monotonic_increasing else False
+            self._cuts[key] = closes
+        if closes is False:
+            return knowable_at(events, timeframe, now, column=column)
+
+        moment = pd.Timestamp(now).tz_convert("UTC").tz_localize(None).to_datetime64()
+        cut = int(np.searchsorted(closes, moment, "right"))
+        return events.iloc[:cut]
+
     def sweeps_by(self, now: pd.Timestamp, since: pd.Timestamp | None = None):
         """Sweeps confirmed by ``now``, optionally only after ``since``."""
-        sweeps = knowable_at(
+        sweeps = self._knowable(
             self.entry.sweeps, self.entry_timeframe, now, column="closed_back_at"
         )
         if since is not None and not sweeps.empty:
@@ -87,7 +129,7 @@ class Context:
 
     def shifts_by(self, now: pd.Timestamp, since: pd.Timestamp | None = None):
         """Market structure shifts knowable at ``now``."""
-        shifts = knowable_at(self.entry.shifts, self.entry_timeframe, now)
+        shifts = self._knowable(self.entry.shifts, self.entry_timeframe, now)
         if since is not None and not shifts.empty:
             shifts = shifts.loc[shifts["time"] >= since]
         return shifts
@@ -98,7 +140,7 @@ class Context:
         A mitigated gap is spent: resting an order at a level price has been
         through and left is waiting for an imbalance that no longer exists.
         """
-        gaps = knowable_at(self.entry.fvgs, self.entry_timeframe, now)
+        gaps = self._knowable(self.entry.fvgs, self.entry_timeframe, now)
         gaps = unmitigated(gaps, now)
         if gaps.empty:
             return gaps
