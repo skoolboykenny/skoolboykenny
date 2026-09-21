@@ -249,9 +249,40 @@ Both are filters on a strategy that has not passed gate 1. A filter on an
 unverified strategy is a filter on a bug. The review layer's honest default is
 off until its own audit says otherwise on real data.
 
+## Phase 6: the daily loop, journal and alerts
+
+`src/ict/plan.py` is the record's seven step routine, run before Asia. It is
+read only, so it can be run at any time against any account or none, and `--at`
+rebuilds it for any past moment through the same point in time accessors the
+engine uses. The bias is the same `draw_on_liquidity` the models use rather
+than a second opinion: a plan that disagreed with the engine would describe a
+system nobody is running. A day with no calendar and a day with no releases do
+not read the same, and an open position turns the plan to no trade.
+
+`src/ict/journal.py` appends and never rewrites, because the record's own
+answer to "this sounds like every scam trading bot" is a visible, honest
+record. Live rows are written one trade at a time as each closes, since a
+process that dies holding its results has no results, and they come from the
+broker rather than from what the loop thinks it did. Every row carries whether
+it was backtest, paper or live. Trades opened outside every kill zone appear
+under their own name so the breakdown adds up; they were being dropped silently
+because pandas 3 keeps NA through `astype(str)` and groupby drops NaN keys.
+
+`src/ict/alerts.py` has two rules. An alert never stops the loop: a sink that
+raises is reported once and then left alone, since retrying a broken webhook on
+every fill turns one outage into a busy loop. And a halt is loud while
+everything else stays quiet enough to keep reading, because an alerting system
+people mute looks like coverage.
+
+`ict plan`, `ict journal`, and `--trade-journal` and `--alert-log` on live.
+`docs/operating.md` covers it.
+
+None of this changes the gate order. Gate 1 is still unstarted and still the
+only thing on the critical path.
+
 ## Later phases (do not build yet)
 
-1. Dashboard, journal and alerts on top of the live loop.
+1. A web dashboard on top of the journal, which doubles as the showcase.
 2. Live only after every gate in `docs/live.md` passes.
 
 ## Project record

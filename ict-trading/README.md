@@ -50,6 +50,22 @@ ict live data/processed/eurusd_m1.parquet         # dry run; --execute to trade
 `ict live` sends nothing unless `--execute` is passed, and refuses the live
 environment without `--i-understand` on top of that.
 
+## Operating it day to day
+
+[`docs/operating.md`](docs/operating.md). The daily plan, the journal and the
+alerts.
+
+```bash
+ict plan data/processed/eurusd_m1.parquet --calendar week.csv --account
+ict journal journal.csv --daily
+```
+
+`ict plan` is read only: it runs the record's seven steps and prints what the
+system intends before it acts. The journal appends and never rewrites, writes
+each live trade as it closes rather than at the end, and takes its rows from
+the broker rather than from what the loop thinks it did. Alerts never stop the
+loop: a sink that fails is reported once and left alone.
+
 ## News and the AI review layer
 
 [`docs/news.md`](docs/news.md). Two things that can stop a trade, and neither
@@ -470,13 +486,17 @@ src/ict/
   config.py          every tunable number
   analysis.py        runs the detectors in dependency order
   cli.py             ingest · fetch · gaps · plot · sample · verify · backtest
-                     rank · news · review-audit · robustness · live · demo
+                     rank · plan · journal · news · review-audit
+                     robustness · live · demo
   data/              vendor CSV readers, OANDA client, cleaning, Parquet store
   timeframes/        New York sessions, resampling, the lookahead guard
   detectors/         one module per concept, each a pure function
   plotting/          annotated charts
   backtest/          engine, broker, costs, risk, the seven models, walk forward
   live/              OANDA order adapter and the live loop
+  plan.py            the daily routine: bias, path, levels, news, account
+  journal.py         append only record of closed trades
+  alerts.py          console, file and webhook sinks
   news/              calendar, the entry gate, and the two news playbooks
   review/            the AI review layer and the audit that polices it
 tests/               hand-built candle sequences with known answers

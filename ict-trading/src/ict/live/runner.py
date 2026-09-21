@@ -142,6 +142,8 @@ class LiveRunner:
         news_gate=None,
         reviewer=None,
         journal=None,
+        trade_journal=None,
+        alerts=None,
         dry_run: bool = True,
     ) -> None:
         if history.empty:
@@ -161,7 +163,10 @@ class LiveRunner:
         self.news_gate = news_gate
         self.reviewer = reviewer
         self.journal = journal
+        self.trade_journal = trade_journal
+        self.alerts = alerts
         self.dry_run = dry_run
+        self._seen_trades: set = set()
 
         equity = broker.equity() if not dry_run else 10_000.0
         self.risk = RiskManager(config=risk or RiskConfig(), starting_equity=equity)
@@ -207,6 +212,8 @@ class LiveRunner:
         at = pd.Timestamp.now(tz="UTC")
         self.halted = Halt(reason=reason, at=at, detail=detail)
         log.error("%s", self.halted)
+        if self.alerts is not None:
+            self.alerts.halt(f"{reason}: {detail}")
         if not self.dry_run:
             try:
                 cancelled = self.broker.cancel_all()
@@ -353,6 +360,11 @@ class LiveRunner:
         self.placed.append(order)
         log.info("placed %s: %s %.0f units @ %.5f", order.order_id,
                  setup.direction, order.units, setup.limit)
+        if self.alerts is not None:
+            self.alerts.info(
+                f"{self.broker.instrument_name} {setup.direction} order resting at "
+                f"{setup.limit:.5f}, stop {setup.stop:.5f}, target {setup.target:.5f}"
+            )
         return setup
 
     def ask_reviewer(self, setup: Setup, stamp: pd.Timestamp, model: BaseModel):
@@ -419,6 +431,88 @@ class LiveRunner:
                 self.consecutive_losses += 1
             else:
                 self.consecutive_losses = 0
+            self.record_closed_trades()
+
+    def record_closed_trades(self) -> int:
+        """Journal anything the broker has closed since the last check.
+
+        Keyed on the broker's own trade id, so a trade is written once however
+        many times reconciliation notices it. The broker is the source: a
+        journal built from what the loop thinks it did would miss a stop that
+        filled while the stream was quiet, which is exactly the trade worth
+        having a record of.
+        """
+        if self.trade_journal is None or self.dry_run:
+            return 0
+
+        try:
+            closed = self.broker.closed_trades_since(
+                pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=2)
+            )
+        except Exception as error:
+            log.warning("could not read closed trades: %s", error)
+            return 0
+
+        written = 0
+        for trade in closed:
+            identifier = str(trade.get("id", ""))
+            if not identifier or identifier in self._seen_trades:
+                continue
+            self._seen_trades.add(identifier)
+            entry = self._journal_entry(trade)
+            if entry is None:
+                continue
+            self.trade_journal.append(entry)
+            written += 1
+            if self.alerts is not None:
+                self.alerts.exit(
+                    f"{entry.instrument} {entry.direction} closed at "
+                    f"{entry.exit:.5f}, {entry.r_multiple:+.2f}R, "
+                    f"net {entry.net:+.2f}"
+                )
+        return written
+
+    def _journal_entry(self, trade: dict):
+        """One of the broker's closed trades, in the journal's shape."""
+        from ..journal import Entry
+
+        try:
+            units = float(trade.get("initialUnits", 0.0))
+            entry_price = float(trade.get("price", 0.0))
+            realised = float(trade.get("realizedPL", 0.0))
+            closed_at = pd.Timestamp(trade["closeTime"]).tz_convert("UTC")
+            opened_at = pd.Timestamp(trade["openTime"]).tz_convert("UTC")
+        except (KeyError, TypeError, ValueError) as error:
+            log.warning("could not read a closed trade: %s", error)
+            return None
+
+        exit_price = float(
+            trade.get("averageClosePrice", trade.get("price", entry_price))
+        )
+        stop = float(
+            (trade.get("stopLossOrder") or {}).get("price", entry_price)
+        )
+        risk = abs(entry_price - stop) * abs(units)
+
+        return Entry(
+            closed_at=closed_at,
+            opened_at=opened_at,
+            instrument=str(trade.get("instrument", self.broker.instrument_name)),
+            model=self.model_name,
+            direction="long" if units > 0 else "short",
+            entry=entry_price,
+            exit=exit_price,
+            stop=stop,
+            target=float((trade.get("takeProfitOrder") or {}).get("price", 0.0)),
+            size=abs(units),
+            outcome=str(trade.get("state", "CLOSED")).lower(),
+            gross=realised + float(trade.get("financing", 0.0)),
+            costs=abs(float(trade.get("financing", 0.0))),
+            net=realised,
+            r_multiple=realised / risk if risk else 0.0,
+            reason=str((trade.get("clientExtensions") or {}).get("comment", "")),
+            source="live" if self.broker.client.credentials.is_live else "paper",
+        )
 
     def run(self, instruments: list[str] | None = None) -> Halt | None:
         """Stream prices until something halts the loop.
