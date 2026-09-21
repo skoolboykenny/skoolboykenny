@@ -398,10 +398,19 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     )
 
     if args.journal:
-        path = Path(args.journal)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        result.to_frame().to_csv(path, index=False)
+        # The journal's own shape, not the raw result frame, so a backtest
+        # journal and a paper one can be read by the same tooling and compared
+        # column for column.
+        from .journal import Journal as TradeJournal
+
+        book = TradeJournal(
+            path=args.journal, instrument=args.instrument, source="backtest"
+        )
+        for trade in result.trades:
+            book.add(trade, model=result.parameters.get("model", ""))
+        path = book.write_all()
         print(f"\nwrote the trade journal to {path}")
+        print("Summarise it with `ict journal`.")
 
     return 0 if metrics.passes else 1
 
@@ -534,6 +543,16 @@ def cmd_live(args: argparse.Namespace) -> int:
     reviewer = _reviewer(args)
     decisions = Journal() if reviewer is not None else None
 
+    from .alerts import Alerts
+    from .journal import Journal as TradeJournal
+
+    alerts = Alerts.default(args.alert_log)
+    trades = TradeJournal(
+        path=args.trade_journal,
+        instrument=args.instrument,
+        source="live" if client.credentials.is_live else "paper",
+    ) if args.trade_journal and args.execute else None
+
     broker = LiveBroker(client, args.instrument)
     runner = LiveRunner(
         broker=broker,
@@ -548,6 +567,8 @@ def cmd_live(args: argparse.Namespace) -> int:
         news_gate=gate,
         reviewer=reviewer,
         journal=decisions,
+        trade_journal=trades,
+        alerts=alerts,
         dry_run=not args.execute,
     )
 
@@ -566,6 +587,9 @@ def cmd_live(args: argparse.Namespace) -> int:
         print("No calendar loaded, so no news gate is active.\n")
     if reviewer is not None:
         print(f"review layer: {args.review}. It may only skip or shrink a trade.\n")
+
+    if trades is not None:
+        print(f"trades are journalled to {trades.path}, one row per close.\n")
 
     halt = runner.run()
     if decisions is not None and args.review_journal:
@@ -691,6 +715,64 @@ def cmd_review_audit(args: argparse.Namespace) -> int:
     return 1 if (result.has_enough_evidence and result.should_switch_off) else 0
 
 
+def cmd_plan(args: argparse.Namespace) -> int:
+    """The daily routine: bias, path, levels, news and account state."""
+    from .plan import build_plan
+
+    candles = read_parquet(args.parquet, side=args.side)
+    if candles.empty:
+        print("that file has no candles", file=sys.stderr)
+        return 1
+
+    broker = None
+    if args.account:
+        from .data.oanda import OandaClient, OandaError
+        from .live import LiveBroker
+
+        try:
+            broker = LiveBroker(OandaClient(), args.instrument)
+        except OandaError as error:
+            print(f"no account: {error}\n", file=sys.stderr)
+
+    plan = build_plan(
+        candles,
+        instrument=args.instrument,
+        now=pd.Timestamp(args.at, tz="UTC") if args.at else None,
+        news_gate=_news_gate(args),
+        broker=broker,
+    )
+
+    print(plan.message() if args.message_only else plan.report())
+
+    if args.alert:
+        from .alerts import Alerts
+
+        Alerts.default(args.alert_log).info(plan.message())
+    return 0
+
+
+def cmd_journal(args: argparse.Namespace) -> int:
+    """Summarise a trade journal."""
+    from .journal import daily_breakdown, read_journal, summarise
+
+    path = Path(args.journal)
+    if not path.exists():
+        print(f"no journal at {path}", file=sys.stderr)
+        return 1
+
+    frame = read_journal(path)
+    since = pd.Timestamp(args.since, tz="UTC") if args.since else None
+    print(summarise(frame, since=since))
+
+    if args.daily and not frame.empty:
+        print("\nBy day")
+        print("-" * 66)
+        for row in daily_breakdown(frame).itertuples():
+            print(f"  {row.date}  {row.trades:>3} trades  "
+                  f"{row.r_multiple:+7.2f}R  {row.net:+10.2f}")
+    return 0
+
+
 def cmd_demo(args: argparse.Namespace) -> int:
     """Generate synthetic 1 minute candles, so the tooling runs before data lands."""
     candles = synthetic_candles(days=args.days, seed=args.seed)
@@ -811,6 +893,7 @@ def build_parser() -> argparse.ArgumentParser:
     backtest.add_argument("--slippage", type=float, default=0.00002)
     backtest.add_argument("--commission", type=float, default=0.0)
     backtest.add_argument("--journal", default=None, help="write trades to CSV")
+    backtest.add_argument("--instrument", default="EUR_USD")
     backtest.add_argument("--calendar", default=None, help="calendar CSV, enables the news gate")
     backtest.add_argument("--calendar-timezone", default=MARKET_TZ)
     backtest.add_argument("--blackout-minutes", type=int, default=15)
@@ -851,6 +934,27 @@ def build_parser() -> argparse.ArgumentParser:
     rank.add_argument("--out", default=None, help="write the ranking to CSV")
     rank.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
     rank.set_defaults(func=cmd_rank)
+
+    plan = sub.add_parser("plan", help="the daily plan: bias, path, levels, news")
+    plan.add_argument("parquet")
+    plan.add_argument("--instrument", default="EUR_USD")
+    plan.add_argument("--at", default=None, help="plan as at this UTC moment")
+    plan.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
+    plan.add_argument("--calendar", default=None)
+    plan.add_argument("--calendar-timezone", default=MARKET_TZ)
+    plan.add_argument("--blackout-minutes", type=int, default=15)
+    plan.add_argument("--block-fomc-day", action="store_true")
+    plan.add_argument("--account", action="store_true", help="include broker state")
+    plan.add_argument("--message-only", action="store_true", help="just the one liner")
+    plan.add_argument("--alert", action="store_true", help="send the plan as an alert")
+    plan.add_argument("--alert-log", default=None)
+    plan.set_defaults(func=cmd_plan)
+
+    journal = sub.add_parser("journal", help="summarise a trade journal")
+    journal.add_argument("journal")
+    journal.add_argument("--since", default=None, help="only trades closed after this")
+    journal.add_argument("--daily", action="store_true", help="show R per day")
+    journal.set_defaults(func=cmd_journal)
 
     news = sub.add_parser("news", help="show what a calendar would gate")
     news.add_argument("calendar", help="calendar CSV export")
@@ -910,6 +1014,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--review-journal", default="review-decisions.csv",
         help="where every review decision is written, skips included",
     )
+    live.add_argument(
+        "--trade-journal", default="journal.csv",
+        help="append every closed trade here, one row at a time",
+    )
+    live.add_argument("--alert-log", default=None, help="append alerts to this file")
     live.add_argument(
         "--execute", action="store_true", help="actually send orders"
     )
