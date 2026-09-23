@@ -84,11 +84,19 @@ GATES = (
 
 @dataclass
 class Gate:
-    """One gate and where it stands."""
+    """One gate, where it stands, and what it would take to move it."""
 
     name: str
     state: str = "not started"  # passed, failed, running, not started
     detail: str = ""
+    #: What the gate is actually asking for, in a sentence.
+    what: str = ""
+    #: The commands, in order. Each is (description, command or "").
+    steps: tuple[tuple[str, str], ...] = ()
+    #: What "done" looks like, so the gate is not a matter of opinion.
+    done_when: str = ""
+    #: True when this is the gate to work on now, so the page can open it.
+    next_up: bool = False
 
     @property
     def status(self) -> str:
@@ -97,6 +105,10 @@ class Gate:
             "failed": "critical",
             "running": "warning",
         }.get(self.state, "muted")
+
+    @property
+    def has_body(self) -> bool:
+        return bool(self.what or self.steps or self.done_when)
 
 
 @dataclass
@@ -432,19 +444,53 @@ def _tiles(stats: dict, has_live: bool) -> str:
 
 
 def _gates(gates: list[Gate]) -> str:
+    """The gates, each opening to show what would move it.
+
+    A native <details> rather than a scripted toggle: it is keyboard reachable
+    without any ARIA, it prints open, and it works with scripting off. The gate
+    that is actually next is open on load, so "what do I do" needs no click.
+    """
     icons = {"good": "✓", "critical": "✕", "warning": "…", "muted": "○"}
     rows = []
-    for gate in gates:
+    for index, gate in enumerate(gates, start=1):
         icon = icons.get(gate.status, "○")
-        rows.append(
-            f'<li class="gate {gate.status}">'
+        head = (
+            f'<summary class="gate-head">'
             f'<span class="gate-icon" aria-hidden="true">{icon}</span>'
-            f'<span class="gate-name">{html.escape(gate.name)}</span>'
+            f'<span class="gate-name"><span class="gate-no">{index}</span>'
+            f"{html.escape(gate.name)}</span>"
             f'<span class="gate-state">{html.escape(gate.state)}</span>'
             f'<span class="gate-detail">{html.escape(gate.detail)}</span>'
-            "</li>"
+            "</summary>"
         )
-    return f'<ul class="gates">{"".join(rows)}</ul>'
+
+        if not gate.has_body:
+            rows.append(f'<div class="gate {gate.status} flat">{head}</div>')
+            continue
+
+        body = []
+        if gate.what:
+            body.append(f'<p class="what">{html.escape(gate.what)}</p>')
+        if gate.steps:
+            items = "".join(
+                f"<li>{html.escape(text)}"
+                + (f"<code>{html.escape(command)}</code>" if command else "")
+                + "</li>"
+                for text, command in gate.steps
+            )
+            body.append(f'<ol class="steps">{items}</ol>')
+        if gate.done_when:
+            body.append(
+                f'<p class="donewhen"><strong>Done when</strong> '
+                f"{html.escape(gate.done_when)}</p>"
+            )
+
+        rows.append(
+            f'<details class="gate {gate.status}"'
+            + (" open" if gate.next_up else "")
+            + f'>{head}<div class="gate-body">{"".join(body)}</div></details>'
+        )
+    return f'<div class="gates">{"".join(rows)}</div>'
 
 
 def _table(frame: pd.DataFrame, limit: int = 60) -> str:
@@ -598,26 +644,75 @@ _TEMPLATE = """<!doctype html>
   }}
   .pos {{ color: var(--pos); }}
   .neg {{ color: var(--neg); }}
-  .gates {{ list-style: none; margin: 0; padding: 0; }}
+  .gates {{ margin: 0; padding: 0; }}
   .gate {{
-    display: grid; align-items: baseline; gap: 4px 12px;
-    grid-template-columns: 20px 1fr auto;
-    padding: 11px 14px; background: var(--panel);
-    border: 1px solid var(--axis); border-radius: 10px; margin-bottom: 7px;
+    background: var(--panel); border: 1px solid var(--axis);
+    border-radius: 10px; margin-bottom: 7px;
   }}
+  .gate-head {{
+    display: grid; align-items: baseline; gap: 4px 12px;
+    grid-template-columns: 20px 1fr auto 14px;
+    padding: 11px 14px; cursor: pointer; list-style: none;
+    border-radius: 10px;
+  }}
+  .gate.flat .gate-head {{ cursor: default; }}
+  .gate-head::-webkit-details-marker {{ display: none; }}
+  .gate-head:hover {{ background: color-mix(in srgb, var(--ink) 4%, transparent); }}
+  .gate-head:focus-visible {{
+    outline: 2px solid var(--pos); outline-offset: -2px;
+  }}
+  .gate-head::after {{
+    content: "+"; color: var(--muted); font-weight: 600;
+    grid-column: 4; grid-row: 1; justify-self: end; align-self: center;
+    font-size: 15px; line-height: 1;
+  }}
+  .gate[open] .gate-head::after {{ content: "−"; }}
+  .gate.flat .gate-head::after {{ content: ""; }}
   .gate-icon {{ font-weight: 700; text-align: center; }}
+  .gate-no {{
+    display: inline-block; min-width: 18px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }}
   .gate.good .gate-icon {{ color: var(--good); }}
   .gate.critical .gate-icon {{ color: var(--critical); }}
   .gate.warning .gate-icon {{ color: var(--warning); }}
   .gate.muted .gate-icon {{ color: var(--muted); }}
   .gate-state {{
     font-size: 12px; color: var(--ink2); text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.05em; white-space: nowrap;
   }}
   .gate-detail {{
     grid-column: 2 / -1; font-size: 13px; color: var(--muted);
   }}
   .gate-detail:empty {{ display: none; }}
+  .gate-body {{
+    padding: 2px 16px 16px 46px; border-top: 1px solid var(--axis);
+    margin-top: 2px;
+  }}
+  .gate-body .what {{
+    margin: 14px 0 12px; font-size: 14px; color: var(--ink2);
+    max-width: 62ch;
+  }}
+  .steps {{ margin: 0; padding-left: 20px; font-size: 14px; }}
+  .steps li {{ margin-bottom: 10px; color: var(--ink2); max-width: 62ch; }}
+  .steps li::marker {{ color: var(--muted); font-variant-numeric: tabular-nums; }}
+  code {{
+    padding: 1px 5px; background: var(--surface);
+    border: 1px solid var(--axis); border-radius: 5px; color: var(--ink);
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }}
+  .steps code {{
+    display: block; margin-top: 6px; padding: 8px 10px; border-radius: 6px;
+    /* Wrapped rather than scrolled: a clipped command is one a reader
+       retypes wrongly, and these are long by nature. */
+    white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%;
+  }}
+  .donewhen {{
+    margin: 14px 0 0; font-size: 14px; color: var(--ink2);
+    padding-top: 12px; border-top: 1px solid var(--axis); max-width: 62ch;
+  }}
+  .donewhen strong {{ color: var(--ink); }}
+
   .chart {{
     margin: 0 0 26px; background: var(--panel);
     border: 1px solid var(--axis); border-radius: 12px; padding: 14px 16px 10px;
@@ -762,6 +857,10 @@ def default_gates(frame: pd.DataFrame) -> list[Gate]:
 
     Everything defaults to not started. A gate is only marked passed by
     evidence, never by the absence of a failure.
+
+    Each carries the commands that would move it, so the page answers "what do
+    I do next" rather than only "where am I". The first gate that is not
+    finished is marked ``next_up`` and opens on load.
     """
     live = not frame.empty and "live" in set(frame.get("source", []))
     paper = not frame.empty and "paper" in set(frame.get("source", []))
@@ -769,26 +868,173 @@ def default_gates(frame: pd.DataFrame) -> list[Gate]:
         int((frame["source"] == "paper").sum()) if not frame.empty else 0
     )
 
-    return [
+    gates = [
         Gate(
             GATES[0][0],
             "not started",
             f"Needs 100 hand marked charts per concept at {PASS_THRESHOLD:.0%} "
-            "agreement. Run `ict label`.",
+            "agreement.",
+            what=(
+                "The detectors must agree with a person. Until they do, a "
+                "'sweep' the code found might not be one, and every result "
+                "below it describes the code rather than the market. This is "
+                "the only gate that cannot be automated, and it is the one "
+                "most likely to end the project."
+            ),
+            steps=(
+                ("Get real data first, from gate 2. Marking a random walk "
+                 "means marking patterns that are not there.", ""),
+                ("Build the labelling page, a hundred charts at a time.",
+                 "ict label data/processed/eurusd_m1.parquet --count 100 "
+                 "--timeframe 15m --out labelling.html"),
+                ("Open it and click the candles. q a w s e d pick the "
+                 "concept; 0 records a chart with nothing on it.", ""),
+                ("Press Download labels, then score your marks against the "
+                 "detectors.",
+                 "ict verify data/processed/eurusd_m1.parquet "
+                 "--labels labels.csv --reviewed reviewed.csv"),
+                ("Tune against the agreement numbers, never against backtest "
+                 "results. Start with mss_prominence_lookback in config.py.", ""),
+            ),
+            done_when=(
+                "ict verify exits zero, meaning every concept is at or above "
+                "90% agreement over 100 charts. Expect several rounds."
+            ),
         ),
-        Gate(GATES[1][0], "not started", "Needs real data. Run `ict fetch`."),
-        Gate(GATES[2][0], "not started", "Blocked on the gate above."),
-        Gate(GATES[3][0], "not started", "Blocked on the gate above."),
+        Gate(
+            GATES[1][0],
+            "not started",
+            "Needs real data.",
+            what=(
+                "Three years of 1 minute EUR/USD with spread, commission and "
+                "slippage modelled. A free OANDA practice account supplies "
+                "both the history and, later, the execution."
+            ),
+            steps=(
+                ("Open a practice account at oanda.com and generate a token "
+                 "under Manage API Access. It needs no deposit.", ""),
+                ("Put the credentials in the environment. Never in the "
+                 "repository.",
+                 "export OANDA_API_TOKEN=... OANDA_ACCOUNT_ID=... "
+                 "OANDA_ENVIRONMENT=practice"),
+                ("Download the history. It resumes if interrupted.",
+                 "ict fetch --start 2021-01-01 "
+                 "--out data/processed/eurusd_m1.parquet"),
+                ("Check for holes. Weekend closes are expected; anything else "
+                 "is a data problem.",
+                 "ict gaps data/processed/eurusd_m1.parquet"),
+                ("Run the backtest once gate 1 has passed.",
+                 "ict backtest data/processed/eurusd_m1.parquet --verified"),
+            ),
+            done_when=(
+                "profit factor above 1.3, expectancy above 0.2R, maximum "
+                "drawdown below 15%, and at least 200 trades."
+            ),
+        ),
+        Gate(
+            GATES[2][0],
+            "not started",
+            "Blocked on the gate above.",
+            what=(
+                "Tuning and reporting on the same data measures how well the "
+                "search fitted that data. This tunes on a rolling window and "
+                "reports only the window after it."
+            ),
+            steps=(
+                ("Roll a year of tuning against the quarter that follows it.",
+                 "ict rank data/processed/eurusd_m1.parquet "
+                 "--train-days 365 --test-days 90"),
+                ("Read the drift column before the expectancy column. Large "
+                 "positive drift means the tuning fitted noise.", ""),
+                ("Ignore any model with fewer than about thirty trades, "
+                 "whatever it scored.", ""),
+            ),
+            done_when=(
+                "a model clears the pass criteria out of sample, on enough "
+                "trades to mean something, with drift near zero."
+            ),
+        ),
+        Gate(
+            GATES[3][0],
+            "not started",
+            "Blocked on the gate above.",
+            what=(
+                "A real edge degrades gently when a parameter moves, and "
+                "survives its trades arriving in a different order. This "
+                "checks both."
+            ),
+            steps=(
+                ("Run the sensitivity sweep and the Monte Carlo together. It "
+                 "exits non-zero unless both halves pass.",
+                 "ict robustness data/processed/eurusd_m1.parquet "
+                 "--model silver_bullet"),
+                ("Size positions off the 95th percentile drawdown, not the "
+                 "one that happened to occur.", ""),
+            ),
+            done_when=(
+                "most neighbouring settings stay profitable and the expectancy "
+                "interval clears zero. An interval spanning zero means the "
+                "edge is not established, whatever the total says."
+            ),
+        ),
         Gate(
             GATES[4][0],
             "running" if paper else "not started",
             f"{paper_trades} paper trades journalled; needs 100 or three months."
             if paper
             else "Blocked on the gates above.",
+            what=(
+                "The same code that was backtested, trading a practice "
+                "account with real fills, real spread and real latency. No "
+                "money at risk: practice and live differ only by hostname."
+            ),
+            steps=(
+                ("Watch it decide without sending anything first.",
+                 "ict live data/processed/eurusd_m1.parquet "
+                 "--calendar week.csv"),
+                ("When the log looks right, let it trade the practice "
+                 "account.",
+                 "ict live data/processed/eurusd_m1.parquet --calendar "
+                 "week.csv --execute --trade-journal journal.csv"),
+                ("Set the halt from the worst drawdown the backtest saw, not "
+                 "from what feels tolerable.", ""),
+                ("Review the record after each session.",
+                 "ict journal journal.csv --daily"),
+            ),
+            done_when=(
+                "three months or 100 trades, with results inside the range the "
+                "backtest predicted. Outside it means the backtest was wrong, "
+                "and a practice account is the cheapest place to find out."
+            ),
         ),
         Gate(
             GATES[5][0],
             "running" if live else "not started",
-            "Blocked on the gates above." if not live else "",
+            "" if live else "Blocked on the gates above.",
+            what=(
+                "Minimum position size for three months. The question here is "
+                "whether the system behaves with real fills and real spread "
+                "widening, and that is answered just as well with tiny size."
+            ),
+            steps=(
+                ("Change one environment variable.",
+                 "export OANDA_ENVIRONMENT=live"),
+                ("The extra flag is required against the live host, so this is "
+                 "a decision rather than a typo.",
+                 "ict live ... --execute --i-understand"),
+                ("Keep the kill switch to hand.", "ict flatten"),
+            ),
+            done_when=(
+                "three months at minimum size with no surprises. Only then is "
+                "scaling a question worth asking."
+            ),
         ),
     ]
+
+    # Mark the first unfinished gate, so the page opens on the work that is
+    # actually next rather than on the first row.
+    for gate in gates:
+        if gate.state != "passed":
+            gate.next_up = True
+            break
+    return gates

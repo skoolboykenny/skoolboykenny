@@ -63,6 +63,9 @@ It leads with the validation gates rather than a profit number, and says in a
 banner when there is no live money in the record. That banner is the reason the
 page is worth showing anyone.
 
+Each gate opens to show the commands that would move it, and the first
+unfinished one is open on load.
+
 The kill switch is `ict flatten` on the command line, not a button on the page:
 a button that closes positions would need a live trading token inside a file
 meant to be shared.

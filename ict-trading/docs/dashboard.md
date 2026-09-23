@@ -30,6 +30,13 @@ research record into the thing it is trying not to resemble.
 **Validation gates.** All six, with state and what is blocking each. No gate is
 ever marked passed by the absence of a failure; it takes evidence.
 
+Each gate **opens** to show what would move it: what the gate is actually
+asking for, the commands in order, and what done looks like so it is not a
+matter of opinion. The first unfinished gate is open on load, so "what do I do
+next" needs no click. It is a native `<details>` rather than a scripted toggle,
+so it is keyboard reachable with no ARIA, prints open, and works with scripting
+off.
+
 **Headline tiles.** Trades, total R, expectancy, win rate, profit factor,
 maximum drawdown. Drawdown is measured peak to trough, so a run that went up
 and came back shows it even if it ends in profit.
