@@ -310,7 +310,10 @@ that. `score()` now takes `reviewed`, the page writes `reviewed.csv`, and
 needs no network, and follows one mark spec.
 
 It leads with the validation gates rather than a profit number, and banners
-plainly when there is no live money in the record. The record's outsider
+plainly when there is no live money in the record. Each gate opens to show what
+would move it: what it asks for, the commands in order, and what done looks
+like. The first unfinished gate is open on load, so the page answers "what do I
+do next" without a click. Native `<details>`, so no ARIA and no script. The record's outsider
 verdict is the reason: a visible, honest journal is what makes anyone trust
 this, and a page that opens with an equity curve while burying the unverified
 detectors is the genre the project is trying not to be in. No gate is marked
