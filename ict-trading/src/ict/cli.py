@@ -275,6 +275,64 @@ def cmd_sample(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_label(args: argparse.Namespace) -> int:
+    """Build the click to mark labelling page for gate 1."""
+    from .labelling import build_chart, build_page
+
+    candles = read_parquet(args.parquet, side=args.side)
+    days = sorted({stamp.date() for stamp in candles.tz_convert(MARKET_TZ).index})
+    if not days:
+        print("no candles to sample", file=sys.stderr)
+        return 1
+
+    rng = random.Random(args.seed)
+    chosen = sorted(rng.sample(days, min(args.count, len(days))))
+
+    charts = []
+    for day in chosen:
+        frame = _day_slice(candles, str(day))
+        if frame.empty:
+            continue
+        if args.timeframe != "1m":
+            frame = resample(frame, args.timeframe)
+            if frame.empty:
+                continue
+        charts.append(build_chart(frame, str(day), args.timeframe))
+
+    if not charts:
+        print("no days produced a chart", file=sys.stderr)
+        return 1
+
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(
+        build_page(charts, title=f"ICT labelling · {args.timeframe}"),
+        encoding="utf-8",
+    )
+
+    print(f"wrote {len(charts)} charts to {out}")
+    print(f"\nOpen it in a browser:\n\n    file://{out.resolve()}\n")
+    print(
+        "Click a candle to mark it. Keys: "
+        + ", ".join(f"{key} {concept.replace('_', ' ')}"
+                    for concept, key, _, _ in __import__(
+                        "ict.labelling", fromlist=["MARKERS"]).MARKERS)
+        + ".\n0 records a chart with nothing on it, which the gate needs."
+    )
+    print(
+        "\nWork is saved in the browser as you go. When you are done, press"
+        "\nDownload labels, then score the detectors against your marks:"
+        f"\n\n    ict verify {args.parquet} --labels labels.csv "
+        "--reviewed reviewed.csv\n"
+    )
+    if len(days) < args.count:
+        print(
+            f"Note: only {len(days)} days of data, fewer than the {args.count} "
+            "asked for.\nThe gate wants 100 charts per concept."
+        )
+    return 0
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     """Score hand labels against the detectors, and apply the 90% gate."""
     labels = read_labels(args.labels)
@@ -291,6 +349,16 @@ def cmd_verify(args: argparse.Namespace) -> int:
         (str(day), str(timeframe))
         for day, timeframe in zip(labels["date"], labels["timeframe"])
     }
+
+    reviewed = None
+    if args.reviewed:
+        from .verification import read_reviewed
+
+        reviewed = read_reviewed(args.reviewed)
+        # A chart looked at and left blank has no labels, so it would never be
+        # analysed without this. Those are exactly the charts that catch a
+        # detector firing on quiet days.
+        wanted |= reviewed
 
     analyses: dict[tuple[str, str], Analysis] = {}
     for day, timeframe in sorted(wanted):
@@ -315,7 +383,27 @@ def cmd_verify(args: argparse.Namespace) -> int:
     largest = max(minutes[tf] for _, tf in analyses)
     tolerance = pd.Timedelta(minutes=largest * args.tolerance)
 
-    scores = score(labels, analyses, tolerance)
+    if reviewed is None:
+        blank = 0
+        print(
+            "No --reviewed file given. Only charts carrying at least one label\n"
+            "are scored, so every detection on a chart you correctly left blank\n"
+            "is invisible, and a detector that over-fires on quiet days passes.\n"
+            "The labelling page writes reviewed.csv for this.\n",
+            file=sys.stderr,
+        )
+    else:
+        blank = len(reviewed) - len({k for k in wanted if k in reviewed and any(
+            (str(d), str(t)) == k
+            for d, t in zip(labels["date"], labels["timeframe"])
+        )})
+        if blank > 0:
+            print(
+                f"{blank} of {len(reviewed)} reviewed charts carry no labels. "
+                "Their detections count as false positives.\n"
+            )
+
+    scores = score(labels, analyses, tolerance, reviewed=reviewed)
     print(
         f"scored {len(labels)} labels over {len(analyses)} "
         f"day/timeframe combinations, tolerance {tolerance}\n"
@@ -859,11 +947,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sample.set_defaults(func=cmd_sample)
 
+    label = sub.add_parser(
+        "label", help="build the click to mark labelling page (gate 1)"
+    )
+    label.add_argument("parquet")
+    label.add_argument("--count", type=int, default=100)
+    label.add_argument("--timeframe", default="15m", choices=list(TIMEFRAMES))
+    label.add_argument("--seed", type=int, default=1)
+    label.add_argument("--out", default="labelling.html")
+    label.add_argument("--side", default="mid", choices=["mid", "bid", "ask"])
+    label.set_defaults(func=cmd_label)
+
     verify = sub.add_parser(
         "verify", help="score hand labels against the detectors"
     )
     verify.add_argument("parquet")
     verify.add_argument("--labels", required=True)
+    verify.add_argument(
+        "--reviewed",
+        default=None,
+        help="charts you looked at, from the labelling page. Without it, "
+             "false positives on charts you correctly left blank are invisible",
+    )
     verify.add_argument(
         "--tolerance",
         type=int,

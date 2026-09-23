@@ -280,6 +280,29 @@ people mute looks like coverage.
 None of this changes the gate order. Gate 1 is still unstarted and still the
 only thing on the critical path.
 
+## Gate 1 tooling
+
+`src/ict/labelling.py` and `ict label` replace the CSV workflow, which was
+never going to be finished: it asked for a timestamp read off a chart by eye
+and typed into a file, six hundred times. The page is self contained with
+Plotly inlined, so it works offline and can be copied between machines. A click
+snaps to the nearest candle, `q a w s e d` select the concept, `0` records a
+chart with nothing on it, and work is saved to the browser as it goes. It shows
+no detector output, which is the whole point of the gate.
+
+Plotly's pan handler consumes `mouseup` on the drag layer, so the click handler
+listens for `click` with `mousedown` recording the start position; `plotly_click`
+alone only fires over a candle body and misses half the clicks in a session.
+
+**A real hole in the gate was fixed here.** `score()` grouped by the charts
+appearing in the labels, so a chart reviewed and correctly left blank
+contributed nothing and every false positive on it was invisible. A detector
+that over-fired on quiet days would have passed the gate built to catch exactly
+that. `score()` now takes `reviewed`, the page writes `reviewed.csv`, and
+`ict verify` warns loudly when it is not given.
+
+`docs/labelling.md` is the guide to follow.
+
 ## Later phases (do not build yet)
 
 1. A web dashboard on top of the journal, which doubles as the showcase.
