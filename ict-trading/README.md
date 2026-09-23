@@ -50,6 +50,22 @@ ict live data/processed/eurusd_m1.parquet         # dry run; --execute to trade
 `ict live` sends nothing unless `--execute` is passed, and refuses the live
 environment without `--i-understand` on top of that.
 
+## Operating it day to day
+
+[`docs/operating.md`](docs/operating.md). The daily plan, the journal and the
+alerts.
+
+```bash
+ict plan data/processed/eurusd_m1.parquet --calendar week.csv --account
+ict journal journal.csv --daily
+```
+
+`ict plan` is read only: it runs the record's seven steps and prints what the
+system intends before it acts. The journal appends and never rewrites, writes
+each live trade as it closes rather than at the end, and takes its rows from
+the broker rather than from what the loop thinks it did. Alerts never stop the
+loop: a sink that fails is reported once and left alone.
+
 ## News and the AI review layer
 
 [`docs/news.md`](docs/news.md). Two things that can stop a trade, and neither
@@ -144,7 +160,24 @@ Everything is on a New York time axis.
 Higher timeframes pull in ten days of context by default (`--context-days`), or
 a 4h chart of one day would be six candles.
 
-## Verifying the detectors
+## Verifying the detectors (gate 1)
+
+[`docs/labelling.md`](docs/labelling.md) is the guide. This is the only thing
+blocking the project.
+
+```bash
+ict label data/processed/eurusd_m1.parquet --count 100 --timeframe 15m --out labelling.html
+# open labelling.html, click candles, press Download labels
+ict verify data/processed/eurusd_m1.parquet --labels labels.csv --reviewed reviewed.csv
+```
+
+One self contained page with every chart in it, Plotly inlined so it works
+offline. Click a candle to mark it, `q a w s e d` pick the concept, `0` records
+a chart with nothing on it. Work is saved in the browser as you go.
+
+Pass `--reviewed`. Without it, charts you reviewed and correctly left blank are
+skipped, so a detector's false positives on quiet days never count.
+
 
 This is the gate that decides whether any of the rest is worth building on:
 90% agreement with hand labels, per concept. It is manual on purpose. Nothing
@@ -469,14 +502,19 @@ bias_candles = stack.as_of(now, "4h")
 src/ict/
   config.py          every tunable number
   analysis.py        runs the detectors in dependency order
-  cli.py             ingest · fetch · gaps · plot · sample · verify · backtest
-                     rank · news · review-audit · robustness · live · demo
+  cli.py             ingest · fetch · gaps · plot · sample · label · verify
+                     backtest · rank · plan · journal · news · review-audit
+                     robustness · live · demo
   data/              vendor CSV readers, OANDA client, cleaning, Parquet store
   timeframes/        New York sessions, resampling, the lookahead guard
   detectors/         one module per concept, each a pure function
   plotting/          annotated charts
   backtest/          engine, broker, costs, risk, the seven models, walk forward
   live/              OANDA order adapter and the live loop
+  labelling.py       the click to mark page for gate 1
+  plan.py            the daily routine: bias, path, levels, news, account
+  journal.py         append only record of closed trades
+  alerts.py          console, file and webhook sinks
   news/              calendar, the entry gate, and the two news playbooks
   review/            the AI review layer and the audit that polices it
 tests/               hand-built candle sequences with known answers
