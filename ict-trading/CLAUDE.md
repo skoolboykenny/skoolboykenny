@@ -303,10 +303,37 @@ that. `score()` now takes `reviewed`, the page writes `reviewed.csv`, and
 
 `docs/labelling.md` is the guide to follow.
 
+## Phase 7: the dashboard
+
+`src/ict/dashboard.py` and `ict dashboard`. One self contained page, about
+30KB, hand built SVG rather than a plotting library so it stays emailable,
+needs no network, and follows one mark spec.
+
+It leads with the validation gates rather than a profit number, and banners
+plainly when there is no live money in the record. The record's outsider
+verdict is the reason: a visible, honest journal is what makes anyone trust
+this, and a page that opens with an equity curve while burying the unverified
+detectors is the genre the project is trying not to be in. No gate is marked
+passed by the absence of a failure.
+
+Colour does one job. Blue above zero and red below is polarity, not identity,
+so it uses the validated diverging pair (worst adjacent CVD separation 21.6
+light, 19.2 dark). The by-model and by-session bars use a single hue because
+the row labels already carry identity. Dark mode is its own steps, under both
+the media query and the theme attribute.
+
+**The kill switch is deliberately not on the page**, which is the one place
+this departs from the record. The page exists to be sent to people, and a
+button that flattens an OANDA account would need a live trading token inside a
+shared file. `ict flatten` does it from the command line, where the token is
+already in the environment and the confirmation is a person. A test asserts the
+page contains no credential, no fetch, and no broker hostname.
+
+`docs/dashboard.md` covers it.
+
 ## Later phases (do not build yet)
 
-1. A web dashboard on top of the journal, which doubles as the showcase.
-2. Live only after every gate in `docs/live.md` passes.
+1. Live only after every gate in `docs/live.md` passes.
 
 ## Project record
 
