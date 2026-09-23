@@ -1,9 +1,13 @@
 # ICT Trading System: Complete Project Record
 
 Owner: Ryan Kenaope
-Date: 20 September 2026
+Planned: 20 September 2026 · Build record updated: 23 September 2026
 
 This file brings together the conversation summary, the agreed outcomes, the full research and build plan, the automation design and the Claude Code handoff brief.
+
+**Parts 1 to 5 are the plan as it was agreed, and are left as written.** They are the record of what was intended, which is worth keeping separable from what was done. [Part 6](#part-6-what-was-built) is the build record: what exists, where it departed from the plan and why, and what the plan got wrong.
+
+Short version: every phase of the roadmap is built and the code is essentially finished. None of it has run against real market data, and the first validation gate has not started, so nothing here is yet evidence about the market.
 
 This is an engineering and research record, not financial advice. Leveraged trading carries a high risk of loss.
 
@@ -265,18 +269,20 @@ The system can run without user input once it passes the validation gates, but a
 
 Six phases over roughly six months part time, each ending in something demonstrable.
 
-| Phase | Weeks | Deliverable |
-| --- | --- | --- |
-| 1. Data and detectors | 1 to 3 | 1 minute data pipeline; swing, FVG, sweep, MSS, order block detectors; annotated chart plots |
-| 2. First model | 4 to 6 | Silver Bullet backtest with costs; results report |
-| 3. Full model set | 7 to 12 | 2022 model, OTE, Power of Three, Judas swing, Turtle Soup, sweep to sweep; walk forward results ranked |
-| 4. News and AI layer | 13 to 16 | Calendar gate, news playbooks, headline risk flag, LLM review returning take, skip or reduce with reasons |
-| 5. Dashboard and paper trading | 17 to 22 | Web dashboard, journal, demo account execution |
-| 6. Decision | 23 onwards | Go live small only if gates pass; publish the case study either way |
+| Phase | Weeks | Deliverable | Built |
+| --- | --- | --- | --- |
+| 1. Data and detectors | 1 to 3 | 1 minute data pipeline; swing, FVG, sweep, MSS, order block detectors; annotated chart plots | Yes |
+| 2. First model | 4 to 6 | Silver Bullet backtest with costs; results report | Yes |
+| 3. Full model set | 7 to 12 | 2022 model, OTE, Power of Three, Judas swing, Turtle Soup, sweep to sweep; walk forward results ranked | Yes |
+| 4. News and AI layer | 13 to 16 | Calendar gate, news playbooks, headline risk flag, LLM review returning take, skip or reduce with reasons | Yes |
+| 5. Dashboard and paper trading | 17 to 22 | Web dashboard, journal, demo account execution | Code yes, paper trading not started |
+| 6. Decision | 23 onwards | Go live small only if gates pass; publish the case study either way | Not reached |
 
-- [ ] Choose data source and first instrument (EUR/USD forex or NQ futures)
-- [ ] Set up repo on GitHub (also fills the missing portfolio link)
-- [ ] Code and verify the first three detectors
+The six phases were written as roughly six months part time. The code took days rather than months, which is not the achievement it sounds like: the code was never the constraint. See Part 6.
+
+- [x] Choose data source and first instrument (EUR/USD forex; OANDA rather than Dukascopy, see Part 6)
+- [x] Set up repo on GitHub (also fills the missing portfolio link)
+- [x] Code and verify the first three detectors (coded and unit tested; *verified against hand labels* remains outstanding, and that distinction turned out to be the whole project)
 
 ---
 
@@ -342,8 +348,111 @@ The Phase 1 brief lives at the repository root as [`CLAUDE.md`](../CLAUDE.md).
 
 # Part 5: Next Steps
 
+*As written on 20 September. Steps 1, 2 and 4 are done; 3 and 5 are superseded by Part 6.*
+
 1. Create an `ict-trading` folder, run `git init`, and add the brief as `CLAUDE.md`.
 2. Open Claude Code in the folder and send: "Read CLAUDE.md and build Phase 1. Start with the data loader and resampler, then the detectors with tests."
 3. Download a few months of EUR/USD 1 minute data from Dukascopy or HistData into `data/`.
 4. Push the repository to GitHub and link it from the portfolio page.
 5. Review the detector plots against ICT's definitions before starting the Silver Bullet backtest.
+
+---
+
+# Part 6: What Was Built
+
+Updated 23 September 2026. Parts 1 to 5 above are the plan as agreed and are left as written; this part is what actually exists.
+
+## Where the project stands
+
+Every phase of the roadmap is built. **The code is essentially finished and the project is not.** Six validation gates stand between here and an answer, and the first one has not started.
+
+| Gate | State |
+| --- | --- |
+| 1. Detectors agree with hand labels 90% | Not started. Tooling built, the labelling is manual |
+| 2. Three years in sample with costs | Blocked: no real data has ever loaded |
+| 3. Walk forward, out of sample only | Machinery built, run only on a random walk |
+| 4. Robustness: sensitivity and Monte Carlo | Built, never run on real data |
+| 5. Paper trading, 3 months or 100 trades | Built, never run |
+| 6. Small live, 3 months | Not reached |
+
+Gates 5 and 6 are six months of calendar that cannot be compressed. The realistic finish is next June if everything passes, and the realistic outcome is that gate 3 or 4 ends it sooner. That is the project working, not failing: every pessimistic assumption in the engine exists to reach that verdict cheaply.
+
+## What exists
+
+Forty-one modules, eighteen commands, 354 tests, eight documents. About 11,600 lines of source and 5,300 of tests.
+
+**Detectors** (`src/ict/detectors/`). Swings, liquidity pools, sweeps, displacement, break of structure, market structure shift, fair value gaps with mitigation and inversion, order blocks, session levels. Each is a pure function returning a timestamped frame, and each has unit tests built on hand made candle sequences with known answers.
+
+**Timeframes** (`src/ict/timeframes/`). New York aligned resampling to 15m, 1h and 4h, the session and kill zone definitions, and the lookahead guard every detector and strategy reads higher timeframe data through.
+
+**Backtest** (`src/ict/backtest/`). Event driven engine, simulated broker, cost model, the risk limits from Part 2, the seven models, walk forward validation and the robustness gate.
+
+**Live** (`src/ict/live/`). OANDA order adapter and the loop that drives it, reusing the backtest's detectors, models and risk manager unchanged.
+
+**News** (`src/ict/news/`). Calendar loading, the entry gate, and the two playbooks, kept out of the ICT model registry so they can never drift into an ICT ranking.
+
+**Review** (`src/ict/review/`). The AI layer, its three reviewers, and the audit that decides whether it keeps its job.
+
+**Operating.** `plan.py` (the daily routine), `journal.py` (append only trade record), `alerts.py`, `dashboard.py`, `labelling.py` (the click to mark page for gate 1).
+
+## Where the build departed from the plan
+
+**Data source: OANDA rather than Dukascopy or HistData.** The plan named Dukascopy. It is unreachable from the build environment, and so is every other market data host tried. OANDA's v20 API solves the data problem and the execution problem with one integration, and a practice account is free and needs no deposit. This is the single most useful change to the plan.
+
+**The kill switch is not in the dashboard.** The plan puts it there. It cannot be: the dashboard is a static file whose purpose is being sent to people, and a button that flattens an account needs a live trading token inside a shared file. `ict flatten` does the job from the command line, where the token is already in the environment and the confirmation is a person rather than a click.
+
+**The labelling workflow was rebuilt.** The plan implied marking charts and recording the results. The first implementation asked for a timestamp read off a chart by eye and typed into a CSV, six hundred times. That is not a fifteen hour job, it is an unbounded one, and it is why gate 1 stalled. `ict label` builds one page where a click snaps to the exact candle.
+
+**The AI review layer's constraint is enforced in the type, not the prompt.** The plan says the layer may only skip or reduce. Headlines are untrusted text from the internet going into a language model, so a prompt is not a boundary. `Verdict` clamps every answer into `[0, 1]` on construction, so the worst a successful prompt injection achieves is a skipped trade.
+
+**The news playbooks are kept out of the model registry.** The plan says they are tested on their own record. Making that structural rather than a convention means they cannot appear in an ICT ranking by accident.
+
+## What the plan got wrong
+
+**The six month schedule was a coding estimate for a problem that is not coding.** Writing the system took days. The binding constraints are fifteen hours of human attention for gate 1, and six months of wall clock for gates 5 and 6. Neither moves faster with more engineering, and most of the work after Phase 2 was built while the actual blocker sat untouched.
+
+**"Code and verify the first three detectors" treats coding and verifying as one task.** They are the whole project apart. Every detector was coded and unit tested in Phase 1; not one has been verified against a human. Every number the system has produced since rests on that gap.
+
+**The validation gates were sound and one of them had a hole.** `score()` grouped by the charts appearing in the labels, so a chart reviewed and correctly left blank contributed nothing and every false positive on it was invisible. A detector that over-fires on exactly the quiet days would have passed a gate whose entire purpose is catching over-firing, which is the failure mode these definitions actually have. Fixed by recording reviewed charts separately.
+
+## Bugs worth remembering
+
+These are kept because each one would have produced a confident, wrong number.
+
+- **Two lookahead bugs**, both caught by the property test that re-runs a backtest on truncated data and asserts finished trades do not change. One read 1 hour pools by a candle *open* time, leaking up to 59 minutes. The other mutated a pool's creation time forward when a swing joined its cluster, so pools vanished from their own past.
+- **82% of Silver Bullet setups rested orders at already mitigated gaps.** A gap price has been through and left is not an imbalance.
+- **A model could return a long whose stop sat above its own entry.** Risk being an absolute distance hid it.
+- **Setups whose whole risk was narrower than the spread** filled at or past their own stop, booking the loss before price moved.
+- **The review layer's audit counted trades the strategy would never have reached.** Blocking a trade means the loss never happens, so the session limits never trip. It read −277R against an unreviewed −26R until the counterfactual got its own risk manager.
+- **`ict sample` drew the detectors' answers on the charts meant for independent labelling**, which turns the gate into a test of whether you can read the code's output.
+- **An unanchored `data/` in `.gitignore` matched `src/ict/data/`**, so the loader package was never committed and a fresh clone did not import. Undetected from Phase 1 until Phase 4.
+- **pandas 3 keeps NA through `astype(str)` and groupby drops NaN keys**, so 19 of 26 trades vanished from a journal breakdown without a word.
+
+## What has actually been measured
+
+Nothing about the market. Every result so far comes from a Gaussian random walk with no trend, no session structure, no fat tails and no liquidity, which is to say from data containing none of the behaviour these models are defined against.
+
+The most informative result is a negative one. On 120 days of that data, turtle soup was the best model that traded; on 200 days it was the worst, at +14.49R and then −94.32R with nothing about the model changed. An ordering that does not survive a change of window is not an ordering, and it is what a model with no edge looks like when the sample is too small to tell.
+
+Written up in [`walk-forward.md`](walk-forward.md) and [`backtest-results.md`](backtest-results.md).
+
+## The next three things
+
+1. **Open an OANDA practice account**, export the token, run `ict fetch`. Free, no deposit, ends the data problem permanently.
+2. **Label 100 charts per concept** with `ict label`, then score with `ict verify --reviewed`. Fifteen to twenty hours. This is the only thing on the critical path and no amount of code substitutes for it.
+3. **Run gates 2 to 4**, which are mostly compute.
+
+`ict dashboard` prints all of this as a page, with each gate opening to the commands that would move it.
+
+## Documents
+
+| File | What it covers |
+| --- | --- |
+| [`labelling.md`](labelling.md) | Gate 1: how to mark charts and what the scores mean |
+| [`live.md`](live.md) | The gate order, OANDA setup, and the path to a live account |
+| [`news.md`](news.md) | The calendar gate, the playbooks, the review layer and its audit |
+| [`operating.md`](operating.md) | The daily plan, the journal and the alerts |
+| [`dashboard.md`](dashboard.md) | The dashboard, and why the kill switch is not on it |
+| [`walk-forward.md`](walk-forward.md) | The seven models ranked out of sample, and why the ranking means nothing yet |
+| [`backtest-results.md`](backtest-results.md) | The Phase 2 Silver Bullet run |
+| [`../CLAUDE.md`](../CLAUDE.md) | The build brief and a phase by phase record of decisions |
