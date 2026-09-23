@@ -181,25 +181,43 @@ def score(
     labels: pd.DataFrame,
     analyses: dict[tuple[str, str], Analysis],
     tolerance: pd.Timedelta,
+    reviewed: set[tuple[str, str]] | None = None,
 ) -> list[ConceptScore]:
     """Score every concept that appears in the labels.
 
     ``analyses`` is keyed by ``(date, timeframe)``, matching the labels file,
     so a day marked on the 15 minute chart is scored against the 15 minute
     detectors rather than the 1 minute ones.
+
+    ``reviewed`` is every chart a person actually looked at, and leaving it out
+    hides the failure this gate exists to catch.
+
+    Without it, only charts carrying at least one label of a concept are
+    scored. A chart where the person correctly saw nothing contributes no
+    labels, so it is skipped, and every false positive the detector fired there
+    becomes invisible. A detector that over-fires on exactly the quiet days
+    would pass a gate built to fail it. With ``reviewed``, a chart that was
+    looked at counts its detections whether or not anything was marked on it.
     """
     scores: list[ConceptScore] = []
+    charts = set(reviewed) if reviewed else None
 
     for concept in sorted(set(labels["concept"])):
         rows = labels.loc[labels["concept"] == concept]
         labelled_times: list[pd.Timestamp] = []
         detected_times: list[pd.Timestamp] = []
 
-        for (day, timeframe), group in rows.groupby(["date", "timeframe"]):
-            analysis = analyses.get((str(day), str(timeframe)))
+        by_chart = {
+            (str(day), str(timeframe)): group
+            for (day, timeframe), group in rows.groupby(["date", "timeframe"])
+        }
+        for key in sorted(charts if charts is not None else by_chart):
+            analysis = analyses.get(key)
             if analysis is None:
                 continue
-            labelled_times.extend(group["time_utc"].tolist())
+            group = by_chart.get(key)
+            if group is not None:
+                labelled_times.extend(group["time_utc"].tolist())
             detected_times.extend(detections(analysis, concept).tolist())
 
         scores.append(
@@ -212,6 +230,18 @@ def score(
         )
 
     return scores
+
+
+def read_reviewed(path: str) -> set[tuple[str, str]]:
+    """Read the charts a person marked as done, as ``(date, timeframe)``."""
+    frame = pd.read_csv(path)
+    missing = {"date", "timeframe"} - set(frame.columns)
+    if missing:
+        raise ValueError(f"{path} is missing columns: {sorted(missing)}")
+    return {
+        (str(row.date), str(row.timeframe))
+        for row in frame.itertuples()
+    }
 
 
 def report(scores: list[ConceptScore]) -> str:
