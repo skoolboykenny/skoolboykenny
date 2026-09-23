@@ -50,6 +50,23 @@ ict live data/processed/eurusd_m1.parquet         # dry run; --execute to trade
 `ict live` sends nothing unless `--execute` is passed, and refuses the live
 environment without `--i-understand` on top of that.
 
+## The dashboard
+
+[`docs/dashboard.md`](docs/dashboard.md). One self contained page, about 30KB,
+that works offline and can be emailed.
+
+```bash
+ict dashboard --journal journal.csv --out dashboard.html
+```
+
+It leads with the validation gates rather than a profit number, and says in a
+banner when there is no live money in the record. That banner is the reason the
+page is worth showing anyone.
+
+The kill switch is `ict flatten` on the command line, not a button on the page:
+a button that closes positions would need a live trading token inside a file
+meant to be shared.
+
 ## Operating it day to day
 
 [`docs/operating.md`](docs/operating.md). The daily plan, the journal and the
@@ -503,14 +520,15 @@ src/ict/
   config.py          every tunable number
   analysis.py        runs the detectors in dependency order
   cli.py             ingest · fetch · gaps · plot · sample · label · verify
-                     backtest · rank · plan · journal · news · review-audit
-                     robustness · live · demo
+                     backtest · rank · plan · dashboard · flatten · journal
+                     news · review-audit · robustness · live · demo
   data/              vendor CSV readers, OANDA client, cleaning, Parquet store
   timeframes/        New York sessions, resampling, the lookahead guard
   detectors/         one module per concept, each a pure function
   plotting/          annotated charts
   backtest/          engine, broker, costs, risk, the seven models, walk forward
   live/              OANDA order adapter and the live loop
+  dashboard.py       the gates, the results and the journal, as one page
   labelling.py       the click to mark page for gate 1
   plan.py            the daily routine: bias, path, levels, news, account
   journal.py         append only record of closed trades
