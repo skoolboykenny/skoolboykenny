@@ -861,6 +861,83 @@ def cmd_journal(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dashboard(args: argparse.Namespace) -> int:
+    """Build the dashboard: gates, results, journal, in one page."""
+    from .dashboard import build, build_page
+
+    board = build(journal_path=args.journal, title=args.title)
+    if board.journal.empty and not Path(args.journal).exists():
+        print(
+            f"no journal at {args.journal}. The page will show the gates and "
+            "nothing else.",
+            file=sys.stderr,
+        )
+
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(build_page(board), encoding="utf-8")
+
+    size = out.stat().st_size / 1024
+    print(f"wrote {out} ({size:.0f} KB)")
+    print(f"\n    file://{out.resolve()}\n")
+    if not board.has_live:
+        print(
+            "The page says plainly that there is no live money in this record."
+            "\nLeave that in. It is the reason the page is worth showing anyone."
+        )
+    return 0
+
+
+def cmd_flatten(args: argparse.Namespace) -> int:
+    """The kill switch: cancel every order and close every position.
+
+    Not a button in the dashboard. That page is meant to be sent to people, and
+    a button that closes positions would need a live trading token inside a
+    shared file. Here the token is already in the environment and the
+    confirmation is a person rather than a click.
+    """
+    from .data.oanda import OandaClient, OandaError
+    from .live import LiveBroker
+
+    try:
+        client = OandaClient()
+        broker = LiveBroker(client, args.instrument)
+        orders = broker.pending_orders()
+        trades = broker.open_trades()
+    except OandaError as error:
+        print(error, file=sys.stderr)
+        return 2
+
+    where = client.credentials.environment.upper()
+    print(f"{where} account {client.credentials.account_id}")
+    print(f"  {len(orders)} resting orders")
+    print(f"  {len(trades)} open positions")
+    if not orders and not trades:
+        print("\nNothing to flatten.")
+        return 0
+
+    if not args.yes:
+        answer = input(
+            f"\nCancel {len(orders)} orders and close {len(trades)} positions "
+            "at market? [y/N] "
+        )
+        if answer.strip().lower() not in ("y", "yes"):
+            print("Left alone.")
+            return 1
+
+    cancelled = broker.cancel_all()
+    closed = broker.close_all()
+    print(f"\ncancelled {cancelled} orders, closed {closed} positions")
+
+    from .alerts import Alerts
+
+    Alerts.default(args.alert_log).halt(
+        f"flattened by hand: {cancelled} orders cancelled, "
+        f"{closed} positions closed"
+    )
+    return 0
+
+
 def cmd_demo(args: argparse.Namespace) -> int:
     """Generate synthetic 1 minute candles, so the tooling runs before data lands."""
     candles = synthetic_candles(days=args.days, seed=args.seed)
@@ -1054,6 +1131,22 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--alert", action="store_true", help="send the plan as an alert")
     plan.add_argument("--alert-log", default=None)
     plan.set_defaults(func=cmd_plan)
+
+    dash = sub.add_parser(
+        "dashboard", help="build the dashboard page from a journal"
+    )
+    dash.add_argument("--journal", default="journal.csv")
+    dash.add_argument("--out", default="dashboard.html")
+    dash.add_argument("--title", default="ICT trading system")
+    dash.set_defaults(func=cmd_dashboard)
+
+    flatten = sub.add_parser(
+        "flatten", help="kill switch: cancel every order, close every position"
+    )
+    flatten.add_argument("--instrument", default="EUR_USD")
+    flatten.add_argument("--yes", action="store_true", help="skip the prompt")
+    flatten.add_argument("--alert-log", default=None)
+    flatten.set_defaults(func=cmd_flatten)
 
     journal = sub.add_parser("journal", help="summarise a trade journal")
     journal.add_argument("journal")
