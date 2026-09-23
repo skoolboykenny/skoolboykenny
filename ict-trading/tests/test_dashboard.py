@@ -197,17 +197,26 @@ def test_the_table_view_is_present_for_every_chart(tmp_path):
 def test_the_page_holds_no_credential_and_cannot_reach_a_broker(tmp_path):
     """The record asks for a kill switch here. It cannot be here.
 
-    This page is meant to be sent to people, and a button that closes
-    positions would need a live trading token inside a shared file.
+    This page is meant to be sent to people. Naming the environment variable in
+    the setup steps is fine and useful; carrying a value, or any way to call a
+    broker, is not.
     """
     frame = journal_of([{"net": 100.0, "r": 1.0}], tmp_path)
     page = build_page(Dashboard(journal=frame, gates=default_gates(frame)))
 
-    assert "oanda" not in page.lower().replace("ict flatten", "")
-    assert "OANDA_API_TOKEN" not in page
+    # No way to reach an account.
+    for host in ("api-fxpractice.oanda.com", "api-fxtrade.oanda.com",
+                 "stream-fxpractice.oanda.com", "stream-fxtrade.oanda.com"):
+        assert host not in page
     assert "Bearer" not in page
     assert "fetch(" not in page
     assert "XMLHttpRequest" not in page
+
+    # The token name may appear in the instructions, but never with a value
+    # after it.
+    for match in re.finditer(r"OANDA_\w*TOKEN=(\S*)", page):
+        assert match.group(1) in ("", "..."), match.group(0)
+
     # And it says where the kill switch actually is.
     assert "ict flatten" in page
 
@@ -217,7 +226,10 @@ def test_the_page_needs_no_network_at_all(tmp_path):
     page = build_page(Dashboard(journal=frame, gates=default_gates(frame)))
     assert "<script src=" not in page
     assert "http://" not in page
-    assert "https://" not in page
+    # oanda.com appears once, as where to open an account. Nothing is fetched.
+    fetched = [u for u in re.findall(r"https://\S+", page)
+               if not u.startswith("https://oanda.com")]
+    assert fetched == [], fetched
 
 
 # --- theming ----------------------------------------------------------------
@@ -262,3 +274,77 @@ def test_build_without_a_journal_still_makes_a_page(tmp_path):
     page = build_page(board)
     assert "Validation gates" in page
     assert "No trades journalled yet" in page
+
+
+# --- the gates open to show what to do --------------------------------------
+
+
+def test_each_gate_carries_the_commands_that_would_move_it():
+    """The page should answer "what do I do next", not only "where am I"."""
+    gates = default_gates(pd.DataFrame())
+    for gate in gates:
+        assert gate.what, gate.name
+        assert gate.steps, gate.name
+        assert gate.done_when, gate.name
+        assert any(command for _, command in gate.steps), gate.name
+
+
+def test_the_first_unfinished_gate_opens_on_load():
+    """"What do I do" should need no click."""
+    gates = default_gates(pd.DataFrame())
+    assert [g.next_up for g in gates].count(True) == 1
+    assert gates[0].next_up
+
+    page = build_page(Dashboard(gates=gates))
+    assert page.count("<details") == 6
+    assert page.count("<details class=\"gate muted\" open>") == 1
+
+
+def test_the_gates_use_a_native_disclosure_not_a_scripted_toggle():
+    """Keyboard reachable with no ARIA, prints open, works with scripting off."""
+    page = build_page(Dashboard(gates=default_gates(pd.DataFrame())))
+    assert "<details" in page and "<summary" in page
+    assert "addEventListener(\"click\"" not in page
+
+
+def test_a_gate_with_nothing_to_say_does_not_pretend_to_expand():
+    page = build_page(Dashboard(gates=[Gate("Bare gate", "passed")]))
+    assert "<details" not in page
+    assert "gate good flat" in page
+
+
+def test_commands_are_shown_as_code_so_they_can_be_copied():
+    page = build_page(Dashboard(gates=default_gates(pd.DataFrame())))
+    assert "<code>ict label" in page
+    assert "<code>ict verify" in page
+    assert "<code>ict fetch" in page
+    assert "<code>ict rank" in page
+    assert "<code>ict robustness" in page
+    assert "<code>ict flatten</code>" in page
+
+
+def test_a_long_command_wraps_rather_than_being_clipped():
+    """A clipped command is one a reader retypes wrongly."""
+    page = build_page(Dashboard(gates=default_gates(pd.DataFrame())))
+    assert "white-space: pre-wrap" in page
+    assert "overflow-wrap: anywhere" in page
+
+
+def test_no_content_carries_stray_markdown():
+    """The text is HTML escaped, so a backtick renders as a backtick."""
+    for gate in default_gates(pd.DataFrame()):
+        for text in (gate.what, gate.done_when, gate.detail):
+            assert "`" not in text, text
+        for description, command in gate.steps:
+            assert "`" not in description, description
+
+
+def test_the_gate_bodies_survive_escaping(tmp_path):
+    """A quote in the prose must not break the markup."""
+    gate = Gate(
+        'A "quoted" gate', "not started", what='It said <b>no</b> & meant it',
+        steps=(("Run <this>", "ict thing --x 1 & 2"),), done_when="a & b",
+    )
+    page = build_page(Dashboard(gates=[gate]))
+    assert "&lt;b&gt;no&lt;/b&gt;" in page
+    assert "<b>no</b>" not in page
