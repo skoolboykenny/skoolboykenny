@@ -24,8 +24,11 @@ Featured Projects
 💬 Online Therapy Web App *(2025 - Present)*
 - Designing and developing the UI/UX for an online therapy platform focused on accessibility and user-friendly interaction.
 
-📈 Quantitative Finance Project
-- Exploring options pricing models and building algorithmic trading strategies using Python and financial data analysis.
+📈 ICT Trading System *(2025 - Present)* · [ict-trading](https://github.com/skoolboykenny/skoolboykenny/tree/main/ict-trading)
+- An engine that turns discretionary trading concepts into explicit, testable rules: deterministic detectors, a New York aligned timeframe stack, and a backtester built to be pessimistic rather than flattering.
+- Seven strategy models, walk forward validation, a broker integration, and an AI review layer that can only shrink or cancel a trade, never create one.
+- Python, pandas, NumPy, Plotly. 354 tests.
+- The interesting part is the validation: six gates a strategy has to pass before any money, and a record that says plainly it has not passed them yet.
 
 👥 Involvements
 
