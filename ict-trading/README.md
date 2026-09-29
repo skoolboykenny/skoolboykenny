@@ -112,6 +112,7 @@ is the guide.
 | `ict review-audit` | Score the AI layer and say whether to keep it |
 | `ict dashboard` | The gates, the results and the journal, as one page |
 | `ict flatten` | Kill switch: cancel every order, close every position |
+| `ict advance` | Report the next gate, and with `--run` execute it |
 | `ict demo` | Generate synthetic candles, to exercise the tooling |
 
 `ict backtest` and `ict robustness` exit non-zero when their criteria fail, so
@@ -192,6 +193,7 @@ src/ict/
   plan.py            the daily routine: bias, path, levels, news, account
   journal.py         append only record of closed trades
   alerts.py          console, file and webhook sinks
+  advance.py         works out the next gate and runs it, within limits
 tests/               hand made candle sequences with known answers
 ```
 
@@ -204,6 +206,7 @@ this level?") go through a segment tree in `detectors/_scan.py`.
 
 | File | What it covers |
 | --- | --- |
+| [`docs/autonomy.md`](docs/autonomy.md) | Running this unattended, and what it refuses to do |
 | [`docs/labelling.md`](docs/labelling.md) | Gate 1: how to mark charts and what the scores mean |
 | [`docs/detectors.md`](docs/detectors.md) | Each detector, and the argument behind its thresholds |
 | [`docs/live.md`](docs/live.md) | The gate order, OANDA setup, the path to a live account |
