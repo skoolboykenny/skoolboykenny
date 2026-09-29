@@ -334,6 +334,37 @@ page contains no credential, no fetch, and no broker hostname.
 
 `docs/dashboard.md` covers it.
 
+## Unattended operation
+
+`src/ict/advance.py` and `ict advance` inspect what is on disk, decide which
+gate is next, and either run it or name who is blocking. Exit codes carry the
+verdict: 0 advanced, 1 a gate failed, 2 blocked on a person, 3 everything a
+machine can check is checked.
+
+Three boundaries are enforced in code rather than by intention, because this
+runs with nobody watching:
+
+- **It cannot place an order.** `live` and `flatten` are absent from the allow
+  list and `run_step` refuses anything not on it.
+- **It cannot tune anything to make a gate pass.** This is the real risk of
+  autonomy here: optimising for a green gate rather than the truth would tune
+  thresholds until `ict verify` agreed with itself, which looks like validation
+  and is its opposite. A test asserts no step carries a tuning flag.
+- **It cannot skip a gate**, and a gate that failed is not a gate that passed.
+
+Gate 1 stays with the owner, and not because of a capability limit. The
+detectors were written from the same definitions an agent would read, so an
+agent marking the charts agrees with the code by construction and the score
+measures only internal consistency. The gate exists to catch the code's idea of
+a sweep drifting from a trader's, and an agent is on the code's side of that
+comparison.
+
+One bug found writing the tests: a half written `labels.csv` parses happily as
+a single column, so `inspect` reported labels present and an unattended run
+would have gone on to score junk. It now requires the columns the scorer needs.
+
+`docs/autonomy.md` covers the setup and the exit codes.
+
 ## Later phases (do not build yet)
 
 1. Live only after every gate in `docs/live.md` passes.
