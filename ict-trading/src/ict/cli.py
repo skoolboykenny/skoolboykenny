@@ -938,6 +938,48 @@ def cmd_flatten(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_advance(args: argparse.Namespace) -> int:
+    """Work out what can be moved forward, and move it.
+
+    Exit codes are the point, because a scheduled run reads them: 0 something
+    was advanced, 1 a gate failed, 2 it is blocked on a person, 3 everything a
+    machine can do is done.
+    """
+    from .advance import inspect, next_step, record, report, run_step
+
+    state = inspect()
+    step = next_step(state)
+    print(report(state, step))
+
+    if step.name == "paper trading":
+        return 3
+    if not step.is_mine:
+        return 2
+    if not args.run:
+        print("\nDry run. Pass --run to execute it.")
+        return 0
+
+    print(f"\nRunning: ict {' '.join(step.command)}\n" + "-" * 62)
+    code, output = run_step(step)
+    print(output.strip()[-4000:])
+
+    marker = record(step, code)
+    if marker:
+        print(f"\nrecorded {marker}")
+
+    if code != 0:
+        print(
+            f"\n{step.name} did not pass. That is a result, not an error: "
+            "the gate exists to say so."
+            "\nNothing is tuned to make it pass. That decision needs a person "
+            "looking at hand labels."
+        )
+        return 1
+
+    print(f"\n{step.name} passed. Run again for the next step.")
+    return 0
+
+
 def cmd_demo(args: argparse.Namespace) -> int:
     """Generate synthetic 1 minute candles, so the tooling runs before data lands."""
     candles = synthetic_candles(days=args.days, seed=args.seed)
@@ -1147,6 +1189,15 @@ def build_parser() -> argparse.ArgumentParser:
     flatten.add_argument("--yes", action="store_true", help="skip the prompt")
     flatten.add_argument("--alert-log", default=None)
     flatten.set_defaults(func=cmd_flatten)
+
+    advance = sub.add_parser(
+        "advance", help="report the next gate, and optionally run it"
+    )
+    advance.add_argument(
+        "--run", action="store_true",
+        help="actually run the step rather than only reporting it",
+    )
+    advance.set_defaults(func=cmd_advance)
 
     journal = sub.add_parser("journal", help="summarise a trade journal")
     journal.add_argument("journal")
