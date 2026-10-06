@@ -71,8 +71,10 @@ def test_an_order_cannot_fill_on_the_candle_it_was_placed_from():
 
 
 def test_a_limit_order_fills_when_price_trades_through_it():
+    # The low stops above the order's stop of 99, so the fill candle resolves
+    # nothing and the position is still open at the end of it.
     candles = make_candles(
-        [(100, 101, 98, 100), (100, 101, 99, 100)], start="2024-03-04 08:00"
+        [(100, 101, 98, 100), (100, 101, 99.4, 100)], start="2024-03-04 08:00"
     )
     broker = Broker(costs=free_costs())
     broker.place(order(limit=99.5))
@@ -81,6 +83,51 @@ def test_a_limit_order_fills_when_price_trades_through_it():
 
     assert broker.position is not None
     assert broker.position.entry == 99.5
+
+
+def test_the_candle_that_fills_an_order_can_also_stop_it():
+    """A fill is not a safe harbour, and this was booking wins as losses' opposite.
+
+    The candle that reached the limit may have carried on through the stop.
+    Leaving the position open until the next candle is the optimistic reading
+    this module exists to refuse: a trade that should book -1R booked +3R.
+    """
+    candles = make_candles(
+        [(100, 101, 98, 100), (100, 101, 97, 100)], start="2024-03-04 08:00"
+    )
+    broker = Broker(costs=free_costs())
+    broker.place(order(limit=99.5, stop=99.0, target=103.0))
+
+    broker.on_candle(candles.index[1], candles.iloc[1])
+
+    assert broker.position is None
+    assert len(broker.trades) == 1
+    assert broker.trades[0].outcome == "stop"
+    assert broker.trades[0].r_multiple == pytest.approx(-1.0)
+
+
+def test_the_candle_that_fills_an_order_can_also_reach_the_target():
+    candles = make_candles(
+        [(100, 101, 98, 100), (100, 104, 99.4, 103)], start="2024-03-04 08:00"
+    )
+    broker = Broker(costs=free_costs())
+    broker.place(order(limit=99.5, stop=99.0, target=103.0))
+
+    broker.on_candle(candles.index[1], candles.iloc[1])
+
+    assert broker.trades[0].outcome == "target"
+
+
+def test_when_the_fill_candle_spans_both_the_stop_still_wins():
+    candles = make_candles(
+        [(100, 101, 98, 100), (100, 104, 97, 100)], start="2024-03-04 08:00"
+    )
+    broker = Broker(costs=free_costs())
+    broker.place(order(limit=99.5, stop=99.0, target=103.0))
+
+    broker.on_candle(candles.index[1], candles.iloc[1])
+
+    assert broker.trades[0].outcome == "stop"
 
 
 def test_an_unfilled_order_expires():

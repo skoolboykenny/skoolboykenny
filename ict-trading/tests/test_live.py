@@ -229,6 +229,55 @@ def test_a_stale_stream_halts_the_loop():
     assert "stale" in halt.reason
 
 
+def test_the_stale_guard_fires_through_the_real_message_path():
+    """The guard was dead: `last_message` was set to now *before* the check,
+    so the gap was always zero and only a hand set field could trip it."""
+    live = runner(guards=Guards(stale_after=pd.Timedelta(seconds=1)))
+
+    beat = {"type": "HEARTBEAT", "time": "2024-03-04T12:00:00Z"}
+    live.on_message(beat)
+    assert not live.halted
+
+    # Wind the clock back on the loop's own record of the last message, which
+    # is what a dead connection looks like, then let a real message arrive.
+    live.last_message = pd.Timestamp.now(tz="UTC") - pd.Timedelta(minutes=5)
+    live.on_message(beat)
+    assert live.halted is not None
+    assert "stale" in live.halted.reason
+
+
+def test_reconciling_counts_realised_money_not_unrealised(monkeypatch):
+    """NAV moves every tick an open position moves.
+
+    Booking those moves as closed results made one position drifting against
+    the account look like a run of losses, and the halt that follows flattens
+    an account that was never in trouble.
+    """
+    live = runner()
+    live.dry_run = False
+    live.risk.equity = 10_000.0
+
+    # The position is 400 down on paper, but nothing has closed.
+    live.broker.account = lambda: {"balance": "10000", "NAV": "9600"}
+    live.broker.closed_trades_since = lambda since: []
+
+    live.reconcile()
+    assert live.consecutive_losses == 0
+    assert live.risk.equity == pytest.approx(10_000.0)
+
+    # Now a trade actually closes for a loss, and that does count.
+    live.broker.account = lambda: {"balance": "9800", "NAV": "9800"}
+    live.reconcile()
+    assert live.consecutive_losses == 1
+    assert live.risk.equity == pytest.approx(9_800.0)
+
+
+def test_balance_prefers_realised_over_nav():
+    live = broker({"/summary": {"account": {"balance": "10000", "NAV": "9500"}}})
+    assert live.balance() == pytest.approx(10_000)
+    assert live.equity() == pytest.approx(9_500)
+
+
 def test_a_drawdown_past_the_guard_halts_the_loop():
     live = runner(guards=Guards(max_drawdown=0.10))
     live.risk.peak_equity = 10_000.0
@@ -271,3 +320,91 @@ def test_a_dry_run_never_sends_an_order():
         })
     assert not any(c["method"] == "POST" for c in live.broker.client.session.calls)
     assert live.placed == []
+
+
+# --- failures that must not be diagnosed as something worse -----------------
+
+
+def test_a_refused_order_does_not_flatten_the_account():
+    """A rejection is a rejection, not a dead stream.
+
+    Letting an OandaError reach run()'s blanket handler diagnosed "stream
+    failed" and halted permanently, which flattens, on the strength of one
+    order being too small or one price being stale.
+    """
+    live = runner()
+    live.dry_run = False
+
+    def refuse(*args, **kwargs):
+        raise OandaError("ORDER_UNITS_LIMIT_EXCEEDED")
+
+    live.broker.place = refuse
+    live.broker.balance = lambda: 10_000.0
+    live.broker.equity = lambda: 10_000.0
+    live.broker.closed_trades_since = lambda since: []
+    live.broker.open_trades = lambda: []
+    live.broker.pending_orders = lambda: []
+
+    # Force a setup through, so the only thing under test is the refusal.
+    wanted = Setup("long", limit=1.0850, stop=1.0840, target=1.0880, reason="x")
+    model = live.model()
+    model.find_setup = lambda now, candle: wanted
+    model.tradeable_at = lambda now: True
+    live.model = lambda: model
+
+    stamp = live.candles.index[-1] + pd.Timedelta(minutes=1)
+    candle = live.candles.iloc[-1].copy()
+    candle.name = stamp
+
+    assert live.on_candle(candle) is None
+    assert live.halted is None, "a refused order must not halt the loop"
+    assert live.placed == []
+
+
+def test_a_restart_does_not_re_journal_what_is_already_written(tmp_path):
+    """A halt requires a restart, and the broker still reports the last two
+    days of closed trades to the new process."""
+    from ict.journal import Entry, Journal
+
+    path = tmp_path / "journal.csv"
+    book = Journal(path=path, instrument="EUR_USD", source="paper")
+    book.append(
+        Entry(
+            closed_at=pd.Timestamp("2024-03-08 15:00", tz="UTC"),
+            opened_at=pd.Timestamp("2024-03-08 14:00", tz="UTC"),
+            instrument="EUR_USD", model="silver_bullet", direction="long",
+            entry=1.085, exit=1.087, stop=1.084, target=1.088, size=1000.0,
+            outcome="target", gross=100.0, costs=0.0, net=100.0, r_multiple=2.0,
+            source="paper", broker_trade_id="17",
+        )
+    )
+
+    live = LiveRunner(broker(), synthetic_candles(days=3).assign(spread=0.00012),
+                      trade_journal=Journal(path=path), dry_run=True)
+    assert "17" in live._seen_trades
+
+
+def test_an_empty_journal_seeds_nothing(tmp_path):
+    from ict.journal import Journal
+
+    live = LiveRunner(broker(), synthetic_candles(days=3).assign(spread=0.00012),
+                      trade_journal=Journal(path=tmp_path / "none.csv"),
+                      dry_run=True)
+    assert live._seen_trades == set()
+
+
+def test_the_journal_entry_balances(tmp_path):
+    """gross - costs must equal net, and financing must reach the bottom line."""
+    live = LiveRunner(broker(), synthetic_candles(days=3).assign(spread=0.00012),
+                      dry_run=True)
+    entry = live._journal_entry({
+        "id": "9", "instrument": "EUR_USD", "initialUnits": "1000",
+        "price": "1.0850", "averageClosePrice": "1.0870",
+        "realizedPL": "20.0", "financing": "-0.5",
+        "openTime": "2024-03-08T14:00:00.000000000Z",
+        "closeTime": "2024-03-08T15:00:00.000000000Z",
+        "stopLossOrder": {"price": "1.0840"},
+    })
+    assert entry.gross - entry.costs == pytest.approx(entry.net)
+    assert entry.net == pytest.approx(19.5)
+    assert entry.broker_trade_id == "9"
