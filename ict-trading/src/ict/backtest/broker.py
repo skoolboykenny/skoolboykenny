@@ -133,6 +133,14 @@ class Broker:
 
         if self.order is not None:
             self._resolve_order(stamp, candle)
+            # A fill is not a safe harbour. The candle that filled the order
+            # may also have traded through the stop, and leaving the position
+            # open until the next candle is the optimistic reading this module
+            # exists to refuse: a trade that should book -1R booked +3R.
+            # Within one candle the path is unknown, so the same rule applies
+            # as everywhere else, and the stop wins.
+            if self.position is not None:
+                self._resolve_position(stamp, candle)
 
     def _resolve_order(self, stamp: pd.Timestamp, candle: pd.Series) -> None:
         order = self.order
@@ -164,7 +172,7 @@ class Broker:
     def _resolve_position(self, stamp: pd.Timestamp, candle: pd.Series) -> None:
         position = self.position
         assert position is not None
-        if stamp <= position.opened_at:
+        if stamp < position.opened_at:
             return
 
         high = float(candle["high"])

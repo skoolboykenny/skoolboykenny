@@ -109,6 +109,17 @@ class LiveBroker:
         summary = self.account()
         return float(summary.get("NAV", summary.get("balance", 0.0)))
 
+    def balance(self) -> float:
+        """Realised money only, which is what the risk ledger must count.
+
+        NAV moves every tick an open position moves. Booking those moves as
+        results makes a normal drawdown on one trade look like a run of losses,
+        and the halt that follows flattens an account that was never in
+        trouble. Balance changes only when a trade closes.
+        """
+        summary = self.account()
+        return float(summary.get("balance", summary.get("NAV", 0.0)))
+
     def open_trades(self) -> list[dict]:
         payload = self.client.get(f"/v3/accounts/{self.client.account_id}/openTrades")
         return payload.get("trades", [])

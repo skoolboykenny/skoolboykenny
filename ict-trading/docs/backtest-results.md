@@ -1,5 +1,25 @@
 # Silver Bullet backtest: results
 
+> **Superseded, 6 October 2026.** Every figure below was produced before two
+> bugs were fixed, and both pushed results in the flattering direction.
+>
+> The candle that filled a limit order was never tested against the stop or the
+> target, so a candle that reached the entry and then traded clean through the
+> stop left the position open and could later book a win: a trade that should
+> have been -1R booked +3R. And the spread gate compared each candle against
+> the whole sample's median spread, which is lookahead in a risk check.
+>
+> Re-running the Silver Bullet over the same 200 days of generated data now
+> gives 76 trades, profit factor 1.08, expectancy 0.129R, against the 81
+> trades, 0.97 and 0.014R below. The numbers moved in both directions by model,
+> which is what a changed trade path does rather than a uniform bias: a trade
+> stopped on its fill candle frees the broker earlier, so a different set of
+> later setups is taken.
+>
+> All of it is still generated data and still means nothing about the market.
+> The figures are kept rather than quietly restated, because the point of this
+> record is that it shows its working.
+
 Run on 2026-09-20 against generated data. **These numbers say nothing about
 EUR/USD.** Read the last section before quoting any of them.
 

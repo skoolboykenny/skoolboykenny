@@ -27,6 +27,7 @@ Nothing here runs without a broker. See ``docs/live.md`` before using it.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from dataclasses import dataclass, field, replace
 
 import pandas as pd
@@ -71,6 +72,22 @@ class Halt:
 
     def __str__(self) -> str:
         return f"HALT {self.reason} at {self.at:%Y-%m-%d %H:%M:%S}: {self.detail}"
+
+
+def _already_journalled(journal) -> set:
+    """Broker trade ids already in the journal file, so a restart adds nothing twice."""
+    path = getattr(journal, "path", None)
+    if path is None or not Path(path).exists():
+        return set()
+    try:
+        import pandas as _pd
+
+        frame = _pd.read_csv(path)
+    except Exception:
+        return set()
+    if "broker_trade_id" not in frame.columns:
+        return set()
+    return {str(v) for v in frame["broker_trade_id"].dropna()}
 
 
 @dataclass
@@ -166,7 +183,10 @@ class LiveRunner:
         self.trade_journal = trade_journal
         self.alerts = alerts
         self.dry_run = dry_run
-        self._seen_trades: set = set()
+        # Seeded from the journal on disk, not empty. A halt requires a
+        # restart, and an empty set made the new process re-journal and
+        # re-alert every trade closed in the previous two days.
+        self._seen_trades: set = _already_journalled(trade_journal)
 
         equity = broker.equity() if not dry_run else 10_000.0
         self.risk = RiskManager(config=risk or RiskConfig(), starting_equity=equity)
@@ -260,10 +280,14 @@ class LiveRunner:
         """
         kind = message.get("type")
         now = pd.Timestamp.now(tz="UTC")
+        # Checked against the *previous* message, then updated. Setting it to
+        # `now` first made the gap always zero, so the guard meant to catch a
+        # dead connection could never fire, and its test passed by setting the
+        # field by hand.
+        self.check_guards(now)
         self.last_message = now
 
         if kind == "HEARTBEAT":
-            self.check_guards(now)
             return None
         if kind != "PRICE":
             return None
@@ -293,7 +317,7 @@ class LiveRunner:
         if self.risk.day is None or self.risk.day.day != day:
             self.risk.start_day(day)
 
-        if self.check_guards(stamp):
+        if self.check_guards(pd.Timestamp.now(tz="UTC")):
             return None
 
         self.reconcile()
@@ -356,7 +380,19 @@ class LiveRunner:
             return setup
 
         expiry = setup.expires_at or (stamp + model.order_life())
-        order = self.broker.place(setup, size, expires_at=expiry, client_tag=self.model_name)
+        try:
+            order = self.broker.place(
+                setup, size, expires_at=expiry, client_tag=self.model_name
+            )
+        except Exception as error:
+            # A refused order is a refused order: size below the minimum, a
+            # stale price, not enough margin. Letting it reach run()'s blanket
+            # handler diagnosed it as "stream failed" and flattened the
+            # account on the strength of one rejection.
+            log.warning("order refused at %s: %s", stamp, error)
+            if self.alerts is not None:
+                self.alerts.error(f"order refused: {error}")
+            return None
         self.placed.append(order)
         log.info("placed %s: %s %.0f units @ %.5f", order.order_id,
                  setup.direction, order.units, setup.limit)
@@ -419,12 +455,16 @@ class LiveRunner:
         if self.dry_run:
             return
         try:
-            equity = self.broker.equity()
+            # Realised balance, not NAV. NAV carries the unrealised move on an
+            # open position, so reconciling against it booked every adverse
+            # minute as a closed loss: one position drifting 0.4% tripped the
+            # day's loss limit and eight such minutes flattened the account.
+            realised = self.broker.balance()
         except Exception as error:
             self.halt("broker unreachable", str(error))
             return
 
-        change = equity - self.risk.equity
+        change = realised - self.risk.equity
         if abs(change) > 1e-9:
             self.risk.record(change)
             if change < 0:
@@ -506,12 +546,17 @@ class LiveRunner:
             target=float((trade.get("takeProfitOrder") or {}).get("price", 0.0)),
             size=abs(units),
             outcome=str(trade.get("state", "CLOSED")).lower(),
-            gross=realised + float(trade.get("financing", 0.0)),
-            costs=abs(float(trade.get("financing", 0.0))),
-            net=realised,
+            # OANDA's realizedPL is the trade's result before financing, and
+            # financing is a separate charge or credit. Treating realizedPL as
+            # net while also calling financing a cost left gross - costs != net
+            # and dropped financing from the bottom line entirely.
+            gross=realised,
+            costs=-float(trade.get("financing", 0.0)),
+            net=realised + float(trade.get("financing", 0.0)),
             r_multiple=realised / risk if risk else 0.0,
             reason=str((trade.get("clientExtensions") or {}).get("comment", "")),
             source="live" if self.broker.client.credentials.is_live else "paper",
+            broker_trade_id=str(trade.get("id", "")),
         )
 
     def run(self, instruments: list[str] | None = None) -> Halt | None:
