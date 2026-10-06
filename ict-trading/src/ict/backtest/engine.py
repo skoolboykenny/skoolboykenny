@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+import numpy as np
 import pandas as pd
 
 from ..analysis import analyse
@@ -217,9 +218,16 @@ def run(
     # for the order's life, which is what placing the order would have done.
     blocked_until: pd.Timestamp | None = None
 
-    median_spread = (
-        float(candles["spread"].median()) if "spread" in candles.columns else 0.0
-    )
+    # Trailing, not whole sample. A full sample median lets the spread gate at
+    # candle ten consult the median of candles it has not seen, which is
+    # lookahead in a risk check. The window matches the live loop's trailing
+    # 1440, so the backtest gate and the live gate are the same gate.
+    if "spread" in candles.columns:
+        median_spreads = (
+            candles["spread"].rolling(1440, min_periods=1).median().to_numpy()
+        )
+    else:
+        median_spreads = np.zeros(len(candles))
 
     tradeable = model.tradeable_mask(candles.index)
     if news_gate is not None:
@@ -295,7 +303,7 @@ def run(
             continue
 
         spread = costs.spread_at(candle)
-        if not costs.is_tradeable(spread, median_spread):
+        if not costs.is_tradeable(spread, float(median_spreads[position])):
             manager.blocked["spread too wide"] = (
                 manager.blocked.get("spread too wide", 0) + 1
             )

@@ -365,6 +365,53 @@ would have gone on to score junk. It now requires the columns the scorer needs.
 
 `docs/autonomy.md` covers the setup and the exit codes.
 
+## Code review, October 2026
+
+A deliberate review of the money touching paths, run while the project was
+blocked on credentials. Eleven findings; the four most serious are fixed and
+the rest are recorded below rather than quietly dropped.
+
+**The candle that filled an order was never tested against its own stop or
+target.** A candle that reached the entry and then traded clean through the
+stop left the position open and could later book a win: a trade that should
+have been -1R booked +3R. This contradicted the module's own stated rule and
+it flattered every result the project has produced. `on_candle` now resolves a
+new position against the candle that opened it, and the stop still wins when
+one candle spans both.
+
+**The spread gate used the whole sample's median.** At candle ten it consulted
+the median of candles it had not seen, which is lookahead in a risk check, and
+it did not match the live loop's trailing window. Both now use a trailing 1440.
+
+**The stale stream halt could never fire.** `last_message` was set to `now`
+before the check, so the gap was always zero, and `on_candle` passed the
+candle's own stamp, which made it negative. The guard meant to catch a dead
+connection was dead code, and its test passed by setting the field by hand.
+
+**Reconciliation counted unrealised money.** It compared NAV, which moves every
+tick an open position moves, so one position drifting against the account
+booked a closed loss every minute: enough of them tripped the losing run halt
+and flattened an account that was never in trouble. It reads realised balance
+now.
+
+Also fixed: a refused order escaped to the blanket handler and halted as
+"stream failed", flattening on one rejection; a restart re-journalled and
+re-alerted every trade from the previous two days, so the journal now carries
+the broker's trade id and seeds from the file; and `gross`, `costs` and `net`
+were inverted against OANDA's meanings, leaving `gross - costs != net` and
+dropping financing from the bottom line.
+
+Known and not yet fixed: a position carried past New York midnight books its
+result to the wrong day's limits; `is_idle`, `cancel_all` and `close_all` are
+account wide rather than per instrument, which only bites with two instruments;
+a plain OHLCV parquet silently drops the live spread so the spread guard
+becomes a no-op; and `manager.blocked` mixes per candle and per decision counts
+under one heading in the report.
+
+`docs/backtest-results.md` and `docs/walk-forward.md` carry a correction
+notice. Their figures are kept rather than restated, because the point of the
+record is that it shows its working.
+
 ## Later phases (do not build yet)
 
 1. Live only after every gate in `docs/live.md` passes.
