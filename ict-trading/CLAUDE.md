@@ -401,12 +401,32 @@ the broker's trade id and seeds from the file; and `gross`, `costs` and `net`
 were inverted against OANDA's meanings, leaving `gross - costs != net` and
 dropping financing from the bottom line.
 
-Known and not yet fixed: a position carried past New York midnight books its
-result to the wrong day's limits; `is_idle`, `cancel_all` and `close_all` are
-account wide rather than per instrument, which only bites with two instruments;
-a plain OHLCV parquet silently drops the live spread so the spread guard
-becomes a no-op; and `manager.blocked` mixes per candle and per decision counts
-under one heading in the report.
+The remaining four were fixed in a second pass:
+
+**A trade is booked to the session it was opened in.** Booking to the closing
+day meant a position carried past New York midnight spent the next day's trade
+cap and tripped its one loss per session, while the day that took the trade
+recorded nothing. `RiskManager` keeps a day per date and `record` takes
+`opened_on`.
+
+**The broker's view is scoped to its instrument.** `is_idle`, `cancel_all` and
+`close_all` were account wide, which was wrong both ways: another instrument's
+position blocked this one's entries, and this one's kill switch would have
+liquidated the other's. `--all-instruments` on `ict flatten` goes wider when
+that is actually wanted. An order with no instrument field, which is what a
+take profit or stop loss looks like, is kept rather than dropped.
+
+**A history with no spread column no longer swallows the live spread.**
+Assigning a row carrying one into a frame without the column dropped it
+silently, so the median stayed zero and the spread guard never filtered
+anything. The column is created when the first row needs it, and the runner
+says once in the log when it is not yet filtering.
+
+**Candle counts and decision counts are reported apart.** `blocked` counts
+candles on which no entry was allowed, so a closed session contributes one a
+minute; `refused` counts setups the model produced and something turned down.
+Printed together under "Entries blocked by", a risk limit's 108,172 read as
+though it had turned away that many trades.
 
 `docs/backtest-results.md` and `docs/walk-forward.md` carry a correction
 notice. Their figures are kept rather than restated, because the point of the

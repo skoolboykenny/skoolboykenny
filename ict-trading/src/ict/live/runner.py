@@ -187,6 +187,7 @@ class LiveRunner:
         # restart, and an empty set made the new process re-journal and
         # re-alert every trade closed in the previous two days.
         self._seen_trades: set = _already_journalled(trade_journal)
+        self._warned_no_spread = False
 
         equity = broker.equity() if not dry_run else 10_000.0
         self.risk = RiskManager(config=risk or RiskConfig(), starting_equity=equity)
@@ -310,6 +311,13 @@ class LiveRunner:
     def on_candle(self, candle: pd.Series) -> Setup | None:
         """A closed 1 minute candle: the only point at which anything happens."""
         stamp = pd.Timestamp(candle.name)
+        # A plain OHLCV history has no spread column, and assigning a row that
+        # carries one silently drops it: the median stayed zero and the spread
+        # guard was a permanent no-op that logged nothing. Make the column
+        # exist before the first row needs it.
+        if "spread" in candle.index and "spread" not in self.candles.columns:
+            self.candles["spread"] = float("nan")
+            log.info("history carried no spread column; live spreads start now")
         self.candles.loc[stamp] = candle
         self.candles = self.candles.sort_index()
 
@@ -342,7 +350,18 @@ class LiveRunner:
             return None
 
         spread = float(candle.get("spread", 0.0))
-        median = float(self.candles["spread"].tail(1440).median()) if "spread" in self.candles else 0.0
+        recent = (
+            self.candles["spread"].dropna().tail(1440)
+            if "spread" in self.candles.columns
+            else pd.Series(dtype="float64")
+        )
+        median = float(recent.median()) if not recent.empty else 0.0
+        if median <= 0 and not self._warned_no_spread:
+            self._warned_no_spread = True
+            log.warning(
+                "no spread history yet, so the spread guard is not filtering. "
+                "It starts once enough live spreads have arrived."
+            )
         if median > 0 and spread > median * self.guards.max_spread_multiple:
             log.info("skipped %s: spread %.6f against median %.6f", stamp, spread, median)
             return None
