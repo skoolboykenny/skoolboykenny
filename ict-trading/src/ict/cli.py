@@ -902,14 +902,16 @@ def cmd_flatten(args: argparse.Namespace) -> int:
     try:
         client = OandaClient()
         broker = LiveBroker(client, args.instrument)
-        orders = broker.pending_orders()
-        trades = broker.open_trades()
+        every = args.all_instruments
+        orders = broker.pending_orders(mine_only=not every)
+        trades = broker.open_trades(mine_only=not every)
     except OandaError as error:
         print(error, file=sys.stderr)
         return 2
 
     where = client.credentials.environment.upper()
-    print(f"{where} account {client.credentials.account_id}")
+    scope = "every instrument" if args.all_instruments else args.instrument
+    print(f"{where} account {client.credentials.account_id}, {scope}")
     print(f"  {len(orders)} resting orders")
     print(f"  {len(trades)} open positions")
     if not orders and not trades:
@@ -925,8 +927,8 @@ def cmd_flatten(args: argparse.Namespace) -> int:
             print("Left alone.")
             return 1
 
-    cancelled = broker.cancel_all()
-    closed = broker.close_all()
+    cancelled = broker.cancel_all(every_instrument=every)
+    closed = broker.close_all(every_instrument=every)
     print(f"\ncancelled {cancelled} orders, closed {closed} positions")
 
     from .alerts import Alerts
@@ -1187,6 +1189,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     flatten.add_argument("--instrument", default="EUR_USD")
     flatten.add_argument("--yes", action="store_true", help="skip the prompt")
+    flatten.add_argument(
+        "--all-instruments", action="store_true",
+        help="flatten the whole account, not just --instrument",
+    )
     flatten.add_argument("--alert-log", default=None)
     flatten.set_defaults(func=cmd_flatten)
 

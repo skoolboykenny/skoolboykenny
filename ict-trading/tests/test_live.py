@@ -408,3 +408,65 @@ def test_the_journal_entry_balances(tmp_path):
     assert entry.gross - entry.costs == pytest.approx(entry.net)
     assert entry.net == pytest.approx(19.5)
     assert entry.broker_trade_id == "9"
+
+
+# --- one runner must not reach into another instrument ----------------------
+
+
+def test_open_trades_and_orders_are_scoped_to_this_instrument():
+    """Account wide was wrong both ways: another instrument's position blocked
+    this one's entries, and this one's kill switch liquidated the other's."""
+    live = broker({
+        "/openTrades": {"trades": [
+            {"id": "1", "instrument": "EUR_USD"},
+            {"id": "2", "instrument": "GBP_USD"},
+        ]},
+        "/pendingOrders": {"orders": [
+            {"id": "7", "instrument": "EUR_USD"},
+            {"id": "8", "instrument": "USD_JPY"},
+        ]},
+    })
+    assert [t["id"] for t in live.open_trades()] == ["1"]
+    assert [o["id"] for o in live.pending_orders()] == ["7"]
+    assert len(live.open_trades(mine_only=False)) == 2
+    assert len(live.pending_orders(mine_only=False)) == 2
+
+
+def test_a_resting_exit_order_is_not_dropped():
+    """A take profit or stop loss names its trade, not an instrument, and
+    dropping it would hide a resting exit."""
+    live = broker({"/pendingOrders": {"orders": [
+        {"id": "9", "type": "TAKE_PROFIT", "tradeID": "1"},
+    ]}})
+    assert len(live.pending_orders()) == 1
+
+
+def test_the_kill_switch_stays_on_its_own_instrument_by_default():
+    live = broker({
+        "/openTrades": {"trades": [
+            {"id": "1", "instrument": "EUR_USD"},
+            {"id": "2", "instrument": "GBP_USD"},
+        ]},
+        "/pendingOrders": {"orders": [{"id": "7", "instrument": "GBP_USD"}]},
+    })
+    assert live.close_all() == 1
+    assert live.cancel_all() == 0
+    assert live.close_all(every_instrument=True) == 2
+
+
+def test_a_history_with_no_spread_column_still_records_live_spreads():
+    """Assigning a row carrying a spread into a frame without the column
+    dropped it silently, leaving the spread guard a permanent no-op."""
+    history = synthetic_candles(days=3).drop(columns=["spread"], errors="ignore")
+    assert "spread" not in history.columns
+
+    live = LiveRunner(broker(), history, dry_run=True)
+    candle = pd.Series(
+        {"open": 1.085, "high": 1.0855, "low": 1.0845, "close": 1.085,
+         "volume": 10.0, "spread": 0.00012},
+        name=history.index[-1] + pd.Timedelta(minutes=1),
+    )
+    live.on_candle(candle)
+
+    assert "spread" in live.candles.columns
+    assert live.candles["spread"].dropna().iloc[-1] == pytest.approx(0.00012)

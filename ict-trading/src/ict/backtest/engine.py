@@ -71,7 +71,14 @@ class BacktestResult:
     final_equity: float
     candles: int
     days: int
+    #: Candles on which an entry was not allowed at all. These count candles,
+    #: so a closed session contributes one per minute.
     blocked: dict[str, int] = field(default_factory=dict)
+    #: Setups the model actually produced and something then refused. These
+    #: count decisions. Keeping them apart matters: printed together under one
+    #: heading, a risk limit's per candle total reads as though it turned away
+    #: thousands of trades.
+    refused: dict[str, int] = field(default_factory=dict)
     pauses: int = 0
     parameters: dict = field(default_factory=dict)
 
@@ -247,6 +254,7 @@ def run(
     current_week = None
     pauses = 0
     settled = 0
+    refused: dict[str, int] = {}
 
     for position, (stamp, candle) in enumerate(candles.iterrows()):
         day = days[position]
@@ -274,7 +282,11 @@ def run(
             shadow.on_candle(stamp, candle)
             if len(shadow.trades) > before_shadow:
                 ghost = shadow.trades[-1]
-                shadow_manager.record(ghost.net)
+                shadow_manager.record(
+                    ghost.net, opened_on=market_date(
+                        pd.DatetimeIndex([ghost.opened_at])
+                    ).iloc[0]
+                )
                 if shadow_pending is not None:
                     journal.settle(shadow_pending, ghost.r_multiple)
                     shadow_pending = None
@@ -290,7 +302,11 @@ def run(
             broker.on_candle(stamp, candle)
             if len(broker.trades) > before:
                 trade = broker.trades[-1]
-                manager.record(trade.net)
+                manager.record(
+                    trade.net, opened_on=market_date(
+                        pd.DatetimeIndex([trade.opened_at])
+                    ).iloc[0]
+                )
                 equity_stamps.append(stamp)
                 equity_values.append(manager.equity)
                 settled += 1
@@ -318,9 +334,7 @@ def run(
         # moves. Cheap to spot here and impossible for a model to spot, since
         # the model never sees the spread.
         if setup.risk <= spread + costs.slippage:
-            manager.blocked["stop inside cost"] = (
-                manager.blocked.get("stop inside cost", 0) + 1
-            )
+            refused["stop inside cost"] = refused.get("stop inside cost", 0) + 1
             continue
 
         size = manager.size_for(setup.risk)
@@ -348,9 +362,7 @@ def run(
                 )
                 shadow_pending = stamp
             if verdict.blocks:
-                manager.blocked["review layer"] = (
-                    manager.blocked.get("review layer", 0) + 1
-                )
+                refused["review layer"] = refused.get("review layer", 0) + 1
                 blocked_until = setup.expires_at or (stamp + model.order_life())
                 continue
             blocked_until = None
@@ -383,7 +395,11 @@ def run(
         broker.close_now(last_stamp, candles.iloc[-1], "backtest_end")
         if len(broker.trades) > settled:
             trade = broker.trades[-1]
-            manager.record(trade.net)
+            manager.record(
+                trade.net, opened_on=market_date(
+                    pd.DatetimeIndex([trade.opened_at])
+                ).iloc[0]
+            )
             equity_stamps.append(last_stamp)
             equity_values.append(manager.equity)
 
@@ -396,6 +412,7 @@ def run(
         candles=len(candles),
         days=int(pd.Series(days).nunique()),
         blocked=dict(manager.blocked),
+        refused=dict(refused),
         pauses=pauses,
         parameters={
             "model": model.name,

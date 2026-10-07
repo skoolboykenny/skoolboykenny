@@ -583,3 +583,77 @@ def test_the_strategy_never_rests_an_order_at_a_spent_gap():
 
     if checked == 0:
         pytest.skip("no setups in this fixture")
+
+
+# --- a trade belongs to the session it was opened in -------------------------
+
+
+def test_a_trade_is_booked_to_the_day_it_was_opened():
+    """Booking to the closing day spent the next session's limits.
+
+    A position carried past New York midnight consumed the following day's
+    trade cap and tripped its one loss per session, while the day that
+    actually took the trade recorded nothing.
+    """
+    from datetime import date
+
+    from ict.backtest.risk import RiskConfig, RiskManager
+
+    manager = RiskManager(config=RiskConfig(), starting_equity=10_000.0)
+    monday, tuesday = date(2024, 3, 4), date(2024, 3, 5)
+
+    manager.start_day(monday)
+    manager.start_day(tuesday)          # the trade is still open overnight
+    manager.record(-100.0, opened_on=monday)
+
+    assert manager.days[monday].trades == 1
+    assert manager.days[monday].losses == 1
+    assert manager.days[tuesday].trades == 0
+    assert manager.days[tuesday].losses == 0
+    # Tuesday may still trade; Monday's loss is Monday's.
+    assert manager.may_trade()
+
+
+def test_a_day_revisited_keeps_its_tally():
+    """start_day must not wipe a day that is already underway."""
+    from datetime import date
+
+    from ict.backtest.risk import RiskConfig, RiskManager
+
+    manager = RiskManager(config=RiskConfig(), starting_equity=10_000.0)
+    day = date(2024, 3, 4)
+    manager.start_day(day)
+    manager.record(-50.0, opened_on=day)
+    manager.start_day(day)
+    assert manager.day.trades == 1
+
+
+def test_recording_without_a_day_still_books_to_the_current_one():
+    from datetime import date
+
+    from ict.backtest.risk import RiskConfig, RiskManager
+
+    manager = RiskManager(config=RiskConfig(), starting_equity=10_000.0)
+    manager.start_day(date(2024, 3, 4))
+    manager.record(-25.0)
+    assert manager.day.trades == 1
+
+
+# --- counts that mean different things are reported separately --------------
+
+
+def test_candle_counts_and_decision_counts_are_not_added_together():
+    """A risk limit's per candle total read as thousands of refused trades."""
+    from ict.cli import synthetic_candles
+
+    result = run(synthetic_candles(days=30), strategy="turtle_soup")
+    assert "stop inside cost" not in result.blocked
+    if result.refused:
+        assert set(result.refused) <= {"stop inside cost", "review layer"}
+
+    text = report(result, measure(result))
+    if result.blocked:
+        assert "Candles where no entry was allowed" in text
+        assert "These count candles, not trades turned away" in text
+    if result.refused:
+        assert "Setups refused" in text

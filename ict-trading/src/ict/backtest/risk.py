@@ -63,6 +63,9 @@ class RiskManager:
     equity: float = field(init=False)
     peak_equity: float = field(init=False)
     day: DayState | None = field(default=None, init=False)
+    #: Every day seen, so a trade can be booked to the session it was opened
+    #: in rather than the one it happened to close in.
+    days: dict = field(default_factory=dict, init=False)
     paused: bool = field(default=False, init=False)
     blocked: dict[str, int] = field(default_factory=dict, init=False)
 
@@ -71,7 +74,7 @@ class RiskManager:
         self.peak_equity = self.starting_equity
 
     def start_day(self, day: date) -> None:
-        self.day = DayState(day=day)
+        self.day = self.days.setdefault(day, DayState(day=day))
 
     def _block(self, reason: str) -> None:
         self.blocked[reason] = self.blocked.get(reason, 0) + 1
@@ -97,15 +100,28 @@ class RiskManager:
     def size_for(self, stop_distance: float) -> float:
         return position_size(self.equity, self.config.risk_per_trade, stop_distance)
 
-    def record(self, net: float) -> None:
-        """Book a closed trade and re-check the drawdown pause."""
+    def record(self, net: float, opened_on: date | None = None) -> None:
+        """Book a closed trade and re-check the drawdown pause.
+
+        ``opened_on`` is the session the trade was *entered* in, and the caps
+        belong to it. Booking to whichever day the trade closed in meant a
+        position carried past New York midnight spent the next day's trade cap
+        and tripped its one loss per session, while the day that actually took
+        the trade recorded nothing.
+        """
         self.equity += net
         self.peak_equity = max(self.peak_equity, self.equity)
-        if self.day is not None:
-            self.day.trades += 1
-            self.day.realised += net
+
+        booked = (
+            self.days.setdefault(opened_on, DayState(day=opened_on))
+            if opened_on is not None
+            else self.day
+        )
+        if booked is not None:
+            booked.trades += 1
+            booked.realised += net
             if net < 0:
-                self.day.losses += 1
+                booked.losses += 1
 
         drawdown = (
             (self.peak_equity - self.equity) / self.peak_equity
