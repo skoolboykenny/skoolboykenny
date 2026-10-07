@@ -188,10 +188,20 @@ def report(
     add("")
 
     if result.blocked:
-        add("Entries blocked by")
+        add("Candles where no entry was allowed")
         add("-" * 60)
         for reason, count in sorted(result.blocked.items(), key=lambda i: -i[1]):
-            add(f"  {reason:<20}{count:>6,}")
+            add(f"  {reason:<26}{count:>8,}")
+        add("  These count candles, not trades turned away: a session that is")
+        add("  closed contributes one for every minute of it.")
+        add("")
+    if getattr(result, "refused", None):
+        add("Setups refused")
+        add("-" * 60)
+        for reason, count in sorted(result.refused.items(), key=lambda i: -i[1]):
+            add(f"  {reason:<26}{count:>8,}")
+        add("  These count decisions: a setup the model produced and something")
+        add("  then turned down.")
         add("")
     if result.pauses:
         add(f"The weekly drawdown pause tripped {result.pauses} time(s).")

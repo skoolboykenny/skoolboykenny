@@ -120,17 +120,39 @@ class LiveBroker:
         summary = self.account()
         return float(summary.get("balance", summary.get("NAV", 0.0)))
 
-    def open_trades(self) -> list[dict]:
-        payload = self.client.get(f"/v3/accounts/{self.client.account_id}/openTrades")
-        return payload.get("trades", [])
+    def open_trades(self, mine_only: bool = True) -> list[dict]:
+        """Open positions, this broker's instrument only by default.
 
-    def pending_orders(self) -> list[dict]:
+        Account wide was wrong in both directions: another instrument's
+        position blocked this one's entries, and this one's kill switch
+        liquidated the other's.
+        """
+        payload = self.client.get(f"/v3/accounts/{self.client.account_id}/openTrades")
+        trades = payload.get("trades", [])
+        return self._mine(trades) if mine_only else trades
+
+    def pending_orders(self, mine_only: bool = True) -> list[dict]:
+        """Resting orders, this broker's instrument only by default."""
         payload = self.client.get(f"/v3/accounts/{self.client.account_id}/pendingOrders")
-        return payload.get("orders", [])
+        orders = payload.get("orders", [])
+        return self._mine(orders) if mine_only else orders
+
+    def _mine(self, items: list[dict]) -> list[dict]:
+        """Keep only what belongs to this broker's instrument.
+
+        An item with no instrument field is kept: a take profit or stop loss
+        order names the trade it belongs to rather than an instrument, and
+        dropping those would hide a resting exit.
+        """
+        wanted = self.instrument_name
+        return [
+            item for item in items
+            if item.get("instrument", wanted) == wanted
+        ]
 
     @property
     def is_idle(self) -> bool:
-        """No position and nothing resting, which is when a new setup may go."""
+        """No position and nothing resting on this instrument."""
         return not self.open_trades() and not self.pending_orders()
 
     # --- orders ------------------------------------------------------------
@@ -196,18 +218,22 @@ class LiveBroker:
             f"/v3/accounts/{self.client.account_id}/orders/{order_id}/cancel", {}
         )
 
-    def cancel_all(self) -> int:
-        """Cancel everything resting. Part of the kill switch."""
+    def cancel_all(self, every_instrument: bool = False) -> int:
+        """Cancel resting orders. Part of the kill switch.
+
+        This instrument only unless asked otherwise, so one runner's halt does
+        not reach into another's positions.
+        """
         cancelled = 0
-        for order in self.pending_orders():
+        for order in self.pending_orders(mine_only=not every_instrument):
             self.cancel(str(order["id"]))
             cancelled += 1
         return cancelled
 
-    def close_all(self) -> int:
-        """Close every open position at market. The other half of the kill switch."""
+    def close_all(self, every_instrument: bool = False) -> int:
+        """Close open positions at market. The other half of the kill switch."""
         closed = 0
-        for trade in self.open_trades():
+        for trade in self.open_trades(mine_only=not every_instrument):
             self.client.put(
                 f"/v3/accounts/{self.client.account_id}/trades/{trade['id']}/close",
                 {"units": "ALL"},
