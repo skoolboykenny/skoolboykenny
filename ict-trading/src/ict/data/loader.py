@@ -29,6 +29,27 @@ from ..config import OHLC_COLUMNS, STORAGE_TZ
 #: HistData stamps its bars in EST all year, with no daylight saving.
 HISTDATA_TZ = "Etc/GMT+5"
 
+#: The GitHub CSV mirror stamps its bars in MetaTrader broker server time,
+#: which is EET in winter and EEST in summer. Nothing in the mirror says so,
+#: so it was deduced from the data: from 2015 onwards the last bar of the
+#: week sits at Friday 23:45 all year, except in March and late October,
+#: where it slips to 22:45. Those are exactly the weeks when US and EU
+#: daylight saving are out of step, which is what you see if the clock
+#: follows the EU schedule while the 17:00 New York close does not. The
+#: week also opens at Monday 00:00 with no Sunday bars, and Monday 00:00
+#: EET is the Sunday 22:00 UTC market open. Both ends agree.
+MIRROR_TZ = "Europe/Riga"
+
+#: Before 2015 the same mirror closes the week at 22:45 most weeks, which is
+#: a different clock, so the file is two series stitched together. Rather
+#: than guess the earlier offset, the earlier part is dropped. What remains
+#: is 2015-01-01 onwards, which is long enough for in-sample, walk forward
+#: and robustness work.
+MIRROR_FIRST_DAY = pd.Timestamp("2015-01-01", tz=STORAGE_TZ)
+
+#: The mirror quotes prices as integer points, so 127362.0 means 1.27362.
+MIRROR_POINT_SCALE = 100_000
+
 
 @dataclass(frozen=True)
 class LoadReport:
@@ -112,7 +133,57 @@ def read_dukascopy_csv(path: str | Path) -> pd.DataFrame:
     return frame
 
 
-_READERS = {"histdata": read_histdata_csv, "dukascopy": read_dukascopy_csv}
+def read_mirror_csv(path: str | Path) -> pd.DataFrame:
+    """Read one CSV from the GitHub forex mirror into a UTC indexed frame.
+
+    The mirror's own columns are ``Date,open,high,low,close,tick_volume``,
+    with prices as integer points and stamps in broker server time. Both are
+    converted here, and bars before :data:`MIRROR_FIRST_DAY` are dropped
+    because they sit on a different clock. See the notes on
+    :data:`MIRROR_TZ` for how the clock was established.
+    """
+    raw = pd.read_csv(path)
+    raw.columns = [c.strip().lower() for c in raw.columns]
+    if "date" not in raw.columns:
+        raise ValueError(f"no date column in {path}")
+
+    stamps = _parse_timestamps(raw["date"])
+    if stamps.dt.tz is not None:
+        raise ValueError(
+            f"{path} carries its own timezone; the mirror reader expects naive "
+            "broker server stamps and would double convert them"
+        )
+    # The market is shut across both daylight saving changeovers, so neither a
+    # missing nor a repeated local hour should appear. Shift rather than raise
+    # if the mirror ever carries one anyway, so one odd bar cannot stop a load.
+    index = (
+        stamps.dt.tz_localize(MIRROR_TZ, nonexistent="shift_forward", ambiguous=True)
+        .dt.tz_convert(STORAGE_TZ)
+    )
+
+    if "volume" not in raw.columns:
+        if "tick_volume" not in raw.columns:
+            raise ValueError(f"no volume column in {path}")
+        raw["volume"] = raw["tick_volume"]
+
+    missing = [c for c in OHLC_COLUMNS if c not in raw.columns]
+    if missing:
+        raise ValueError(f"missing columns {missing} in {path}")
+
+    frame = raw[list(OHLC_COLUMNS)].copy()
+    for column in ("open", "high", "low", "close"):
+        # Round before scaling: the mirror carries float representation noise
+        # such as 127456.00000000001, which is an integer point count.
+        frame[column] = frame[column].round() / MIRROR_POINT_SCALE
+    frame.index = pd.DatetimeIndex(index, name="timestamp")
+    return frame.loc[frame.index >= MIRROR_FIRST_DAY]
+
+
+_READERS = {
+    "histdata": read_histdata_csv,
+    "dukascopy": read_dukascopy_csv,
+    "mirror": read_mirror_csv,
+}
 
 
 def clean(frame: pd.DataFrame) -> tuple[pd.DataFrame, LoadReport]:

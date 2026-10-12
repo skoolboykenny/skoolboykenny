@@ -203,3 +203,59 @@ def test_previous_week_level_is_not_available_in_the_week_that_made_it():
 
     # One week of data means there is no previous week to report.
     assert levels.loc[levels["name"].str.startswith("previous_week")].empty
+
+
+def test_mirror_reader_converts_broker_time_and_point_prices(tmp_path):
+    """The mirror's own format: EET/EEST stamps and integer point prices."""
+    from ict.data import read_mirror_csv
+
+    path = tmp_path / "eurusdm15.csv"
+    path.write_text(
+        "Date,open,high,low,close,tick_volume\n"
+        # January, so EET, which is UTC+2. Representation noise is deliberate.
+        "2015-01-05 10:00:00,120538.0,120541.00000000001,120344.0,120410.0,1236\n"
+        # July, so EEST, which is UTC+3.
+        "2015-07-06 10:00:00,110000.0,110100.0,109900.0,110050.0,900\n"
+    )
+
+    frame = read_mirror_csv(path)
+
+    assert list(frame.columns) == ["open", "high", "low", "close", "volume"]
+    assert str(frame.index.tz) == "UTC"
+    # Winter bar shifts back two hours, summer bar three.
+    assert frame.index[0] == pd.Timestamp("2015-01-05 08:00:00", tz="UTC")
+    assert frame.index[1] == pd.Timestamp("2015-07-06 07:00:00", tz="UTC")
+    # Integer points become prices, and the noise is rounded away first.
+    assert frame["high"].iloc[0] == pytest.approx(1.20541)
+    assert frame["open"].iloc[0] == pytest.approx(1.20538)
+
+
+def test_mirror_reader_drops_the_stitched_earlier_clock(tmp_path):
+    """Pre-2015 rows sit on a different clock, so they are not loaded."""
+    from ict.data import MIRROR_FIRST_DAY, read_mirror_csv
+
+    path = tmp_path / "eurusdm15.csv"
+    path.write_text(
+        "Date,open,high,low,close,tick_volume\n"
+        "2014-06-02 10:00:00,136000.0,136100.0,135900.0,136050.0,500\n"
+        "2015-06-02 10:00:00,110000.0,110100.0,109900.0,110050.0,500\n"
+    )
+
+    frame = read_mirror_csv(path)
+
+    assert len(frame) == 1
+    assert frame.index[0] >= MIRROR_FIRST_DAY
+
+
+def test_mirror_reader_refuses_stamps_that_carry_a_timezone(tmp_path):
+    """A stamp with an offset would be converted twice, so it is an error."""
+    from ict.data import read_mirror_csv
+
+    path = tmp_path / "eurusdm15.csv"
+    path.write_text(
+        "Date,open,high,low,close,tick_volume\n"
+        "2015-06-02 10:00:00+00:00,110000.0,110100.0,109900.0,110050.0,500\n"
+    )
+
+    with pytest.raises(ValueError, match="double convert"):
+        read_mirror_csv(path)

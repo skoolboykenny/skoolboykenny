@@ -10,25 +10,41 @@ only shrink or cancel a trade, never create one.
 
 ## Where this actually stands
 
-**Every phase is built. None of it has run against real market data.**
+**Every phase is built. Gate 2 has now run on real market data, and it
+failed.**
 
 The question the project answers is whether ICT's concepts can be defined
 precisely enough to trade mechanically, and then whether doing so has an edge.
-The first part is done. The second has not started, because it is gated on
-something no amount of code can supply.
+The first part is done. The second now has its first real answer, and the
+answer is no on the data available.
 
 | Gate | State |
 | --- | --- |
 | 1. Detectors agree with hand labels 90% | **Not started.** The tooling is built; the labelling is manual |
-| 2. Three years in sample, with costs | Blocked: no real data has loaded |
-| 3. Walk forward, out of sample only | Built, run only on a random walk |
-| 4. Robustness: sensitivity and Monte Carlo | Built, never run on real data |
-| 5. Paper trading, 3 months or 100 trades | Built, never run |
+| 2. Three years in sample, with costs | **Failed on real data.** Profit factor 0.77 to 0.85, expectancy around -0.2R |
+| 3. Walk forward, out of sample only | Not run: gate 2 failed |
+| 4. Robustness: sensitivity and Monte Carlo | Not run: gate 2 failed |
+| 5. Paper trading, 3 months or 100 trades | Built, never run. Needs a broker |
 | 6. Small live, 3 months | Not reached |
 
-Every number this tooling has printed so far comes from a Gaussian random walk,
-which contains none of the behaviour these models are defined against. Treat
-them as evidence about the code and nothing else.
+For twelve days this project recorded itself as blocked on broker credentials.
+That was wrong. A council session on the question found, in its peer review
+round, that nobody had checked whether real data was reachable without them.
+It was: roughly ten years of real EUR/USD M15 is mirrored on GitHub, which is
+the one host this build environment can reach. See
+[`docs/council/`](docs/council/) and [`docs/data-sources.md`](docs/data-sources.md).
+
+On 178,209 real candles from 2015 to 2022, five of the seven models could not
+be tested at all, because M15 is too coarse for a setup that has to fit inside
+a one hour window. The two that trade, optimal trade entry and sweep to sweep,
+fail every pass criterion and are negative **before** costs. Full numbers in
+[`docs/backtest-results.md`](docs/backtest-results.md).
+
+**This does not mean ICT has no edge, and the reason matters.** Until the
+detectors pass gate 1, an unprofitable result is first of all evidence about
+the code, so it cannot yet distinguish "ICT does not work" from "this code
+does not implement ICT". Every number printed before 12 October 2026 came from
+a Gaussian random walk and is evidence about the code and nothing else.
 
 `ict dashboard` renders the table above as a page, with each gate opening to
 the commands that would move it.
@@ -216,4 +232,6 @@ this level?") go through a segment tree in `detectors/_scan.py`.
 | [`docs/walk-forward.md`](docs/walk-forward.md) | The seven models ranked, and why the ranking means nothing yet |
 | [`docs/backtest-results.md`](docs/backtest-results.md) | The Silver Bullet run |
 | [`docs/project-record.md`](docs/project-record.md) | The plan, what was built, and what the plan got wrong |
+| [`docs/data-sources.md`](docs/data-sources.md) | Where the candles come from, and what is wrong with them |
+| [`docs/council/`](docs/council/) | Council sessions on the decisions with real stakes |
 | [`DATA.md`](DATA.md) | The Dukascopy download, kept for reference |

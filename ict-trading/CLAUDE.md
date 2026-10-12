@@ -8,7 +8,16 @@ a broker API. Price logic is deterministic Python. An AI review layer is added
 later and may only reduce or cancel trades.
 
 Owner: Ryan Kenaope. Use UK English in all docs, comments and output. Do not
-use " - " as a dash in prose.
+use " - " as a dash in prose. Never delete branches or history.
+
+**Decisions go to the council.** When a choice has real stakes and more than
+one defensible answer, run it through the `llm-council` skill and act on the
+verdict rather than deciding alone. That covers things like which data source
+to depend on, whether a threshold change is justified, whether a result is
+trustworthy, and when to stop building. It does not cover routine judgement:
+naming, commit messages, which test to write, how to structure a function. A
+council convened over every small call is noise, and the point of it is to
+pressure test the decisions that would be expensive to get wrong.
 
 ## Phase 1: data and detectors
 
@@ -431,6 +440,98 @@ though it had turned away that many trades.
 `docs/backtest-results.md` and `docs/walk-forward.md` carry a correction
 notice. Their figures are kept rather than restated, because the point of the
 record is that it shows its working.
+
+## Real market data, October 2026
+
+The project spent twelve days recording itself as blocked on broker
+credentials and a network policy. That was wrong, and the council found it.
+
+Under the rule above, the question "what should I do about being blocked for
+twelve days" went to the council rather than being decided alone. The advisors
+argued about how to extract twenty minutes from the owner; three of them
+inferred he did not want the answer. The peer review round rejected that
+inference as unsupported, since he had actively directed every phase and had
+explicitly said to keep going without his input, and then caught what all five
+advisors had missed: **nobody had checked whether the data was obtainable
+without him at all.**
+
+It was. Roughly ten years of real EUR/USD M15 is mirrored on GitHub, and
+`raw.githubusercontent.com` is the one host this environment can reach. Every
+market data service is denied, including the FXCM M1 archive and Dukascopy, so
+the mirror is not a convenience: it is the only real data available here, and
+M15 is the finest granularity it serves.
+
+The lesson is not about networks. Twelve days of dashboards, docs and runners
+were built on an unexamined premise, and a premise that stops all progress is
+the first thing to test, not the last.
+
+`docs/council/council-transcript-2026-10-12.md` is the full session.
+`docs/data-sources.md` records what is reachable, the mirror's provenance and
+its five material limitations.
+
+**The mirror does not say what timezone it stamps bars in**, and every ICT
+concept here is defined in New York time, so a one hour error would move every
+kill zone. The clock was established from the data: from 2015 the week closes
+at Friday 23:45 except in March and late October, which are exactly the weeks
+US and EU daylight saving are out of step, and the week opens Monday 00:00
+with no Sunday bars, which is the Sunday 22:00 UTC market open. Both ends say
+EET and EEST, the MetaTrader server clock. Converting on that basis puts the
+last bar of the week at 16:45 New York, the bar closing at 17:00, which is the
+real weekly close and an independent confirmation. Before 2015 the same file
+is on a different clock, so it is two series stitched together and the earlier
+part is dropped rather than guessed at.
+
+### What the data said
+
+Five of seven models could not be tested: at M15 the Silver Bullet's sweep,
+displacement, gap and entry have to fit in four candles, and it found zero
+setups in three years. Untested is not rejected.
+
+The two that trade, optimal trade entry and sweep to sweep, **fail gate 2 on
+every criterion**: profit factor 0.77 to 0.85, expectancy around -0.2R, over
+99 to 266 trades. The longer span is worse than the shorter one, so it is not
+one bad window. And it is not costs: both are negative **before** costs, at
+-0.082R and -0.112R gross, with costs roughly doubling a loss that was already
+there. A tighter spread would not rescue either.
+
+This is the first meaningful number the project has produced. Everything
+before it came from a Gaussian random walk.
+
+### The gate order, and what the result did to it
+
+The council's recommendation was to move gate 1 behind gate 3: hand labelling
+measures faithfulness to ICT's vocabulary rather than profitability, so
+spending the owner's fifteen to twenty hours before knowing whether anything
+survives walk forward is the wrong order. On that argument the ask shrank from
+twenty hours plus twenty minutes to twenty minutes.
+
+Gate 2 then failed, which settles the sequencing question and raises a sharper
+one. The report prints on every run that until gate 1 passes, a profitable
+result is evidence about the code rather than the strategy. **The converse
+holds.** An unprofitable result from unverified detectors is also first of all
+evidence about the code, so these numbers cannot distinguish "ICT does not
+work" from "this code does not implement ICT". Gate 1 is the only thing that
+separates them.
+
+So gate 1 is no longer on the critical path to a result. It is now the
+difference between a finding about this repository and a finding about the
+methodology, and which of those is wanted is the owner's call rather than the
+code's.
+
+### Still needing the owner
+
+Only two things, and neither is twenty hours:
+
+1. **M1 data**, which is the largest gap in the result, since five of seven
+   models including the primary one are untested for want of finer bars. Any
+   MetaTrader demo export parses with `ict ingest --source mirror`; OANDA
+   needs three environment variables and two allowed domains.
+2. **Gates 5 and 6**, paper and live, which an archive cannot do at all.
+
+Worth checking before either: whether an OANDA account can be opened from
+Botswana. The region selector lists it; OANDA Global Markets' eligible
+countries page reportedly does not, and that page is on a blocked domain so it
+could not be checked from here.
 
 ## Later phases (do not build yet)
 
