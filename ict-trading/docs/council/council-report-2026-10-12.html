@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Council: The Twelve Day Block</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#16191d; --muted:#5c6470; --line:#e2e6ea; --card:#f7f9fb;
+    --accent:#2a78d6; --warn:#e34948; --ok:#1f7a4d;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14171a; --fg:#e8ebee; --muted:#9aa4b0; --line:#2b3136; --card:#1b1f23;
+      --accent:#3987e5; --warn:#e66767; --ok:#4fb383;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#14171a; --fg:#e8ebee; --muted:#9aa4b0; --line:#2b3136; --card:#1b1f23;
+    --accent:#3987e5; --warn:#e66767; --ok:#4fb383;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  .wrap{max-width:52rem; margin:0 auto; padding:2.5rem 16px 4rem}
+  h1{font-size:1.75rem; line-height:1.25; margin:0 0 .25rem}
+  .sub{color:var(--muted); margin:0 0 2rem; font-size:.95rem}
+  h2{font-size:1.2rem; margin:2.25rem 0 .75rem; padding-bottom:.35rem; border-bottom:1px solid var(--line)}
+  h3{font-size:1rem; margin:1.5rem 0 .4rem}
+  .q{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:1rem 1.15rem; margin-bottom:1.5rem}
+  .q p{margin:.4rem 0}
+  .verdict{border:2px solid var(--accent); border-radius:10px; padding:1.15rem 1.25rem; background:var(--card)}
+  .verdict h2{margin-top:0; border:0; color:var(--accent)}
+  .lead{font-size:1.05rem; font-weight:600}
+  table{width:100%; border-collapse:collapse; margin:1rem 0; font-size:.92rem}
+  th,td{text-align:left; padding:.5rem .6rem; border-bottom:1px solid var(--line); vertical-align:top}
+  th{color:var(--muted); font-weight:600}
+  details{border:1px solid var(--line); border-radius:8px; padding:.6rem .9rem; margin:.5rem 0; background:var(--card)}
+  summary{cursor:pointer; font-weight:600}
+  details p:last-child{margin-bottom:.2rem}
+  .tag{display:inline-block; font-size:.78rem; padding:.1rem .5rem; border-radius:999px; border:1px solid var(--line); color:var(--muted); margin-left:.4rem}
+  .bad{color:var(--warn); font-weight:600}
+  .good{color:var(--ok); font-weight:600}
+  footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--line); color:var(--muted); font-size:.86rem}
+  code{background:var(--card); border:1px solid var(--line); border-radius:4px; padding:.05rem .3rem; font-size:.9em}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Council: the twelve day block</h1>
+<p class="sub">ICT trading system &middot; 12 October 2026 &middot; five advisors, three reviewers, one chairman</p>
+
+<div class="q">
+  <p><strong>The question.</strong> The project is fully built and has produced nothing of value, because no real market data has ever loaded. The environment denies every market data host and there are no broker credentials. Both are settings only the owner can change, estimated at twenty minutes of his time.</p>
+  <p>Twelve days have passed. Nothing has moved. In those twelve days the agent built a dashboard, rewrote docs, built an unattended runner and fixed eight real bugs. Useful; no gate advanced. The agent has twice asked whether something is blocking him and got no answer, while he replies to other things and asks &ldquo;how far?&rdquo;.</p>
+  <p>Options: <strong>A</strong> keep waiting &middot; <strong>B</strong> credential free path &middot; <strong>C</strong> alternative low quality data &middot; <strong>D</strong> declare complete and go quiet &middot; <strong>E</strong> something not considered.</p>
+</div>
+
+<div class="verdict">
+<h2>Verdict</h2>
+<p class="lead">E. The premise was false. Load the real data that was always reachable.</p>
+<p>Every advisor accepted &ldquo;the environment denies every market data host&rdquo; as fixed and argued about how to extract twenty minutes from a human being. The peer review round refused to: two reviewers independently said nobody had checked whether the data was obtainable without the owner at all, and that this should have been researched on day one.</p>
+<p>It was then researched. Roughly ten years of real EUR/USD M15 is mirrored on GitHub, and GitHub is the one host this environment can reach. <strong>The twelve day block was never a credentials problem. It was a failure to look.</strong></p>
+<p>Then re-sequence: hand labelling measures faithfulness to ICT&rsquo;s vocabulary rather than profitability, so spending the owner&rsquo;s twenty hours before knowing whether anything survives walk forward is the wrong order.</p>
+</div>
+
+<h2>Where the advisors landed</h2>
+<table>
+  <tr><th>Advisor</th><th>Call</th><th>Core argument</th></tr>
+  <tr><td>Contrarian</td><td>E, then shelve</td><td>Two ignored questions is a declined request. Someone who will not spend 20 minutes will never spend 20 hours, so it dies at gate 1.</td></tr>
+  <tr><td>First Principles</td><td>E, re-sequence</td><td>Gate 1 is in the wrong place. Data first, labels only if an edge survives. Cuts the ask from 20 hours to 20 minutes.</td></tr>
+  <tr><td>Expansionist</td><td>C, publish</td><td>The asset is not the bot, it is a falsification rig for retail trading claims. The null result is the product.</td></tr>
+  <tr><td>Outsider</td><td>E, then stop</td><td>Not a tooling problem. He has seen the full price and does not want to pay it. More output is the kindest looking way to avoid asking.</td></tr>
+  <tr><td>Executor</td><td>B, done properly</td><td>Four tasks across three interfaces is not a twenty minute task. Reduce it to one paste, then stop writing code.</td></tr>
+</table>
+
+<h3>Agreement</h3>
+<p>Four of five: the twelve days of dashboards and runners were the agent&rsquo;s failure mode, not the owner&rsquo;s, manufacturing the feeling of progress to avoid an unresolved dependency. All five: a third &ldquo;are you blocked?&rdquo; is worthless.</p>
+
+<h3>Clash</h3>
+<p><strong>On option C.</strong> The Expansionist wanted it as strategy; the Contrarian called it fabrication with extra steps, because a number from thin data becomes a quotable number. Resolved on the Executor&rsquo;s distinction: exercising the pipeline on real data is legitimate, publishing a performance figure from inadequate data is not. The difference is whether a number is allowed to leave the room.</p>
+<p><strong>On the owner.</strong> Three advisors inferred he does not want the answer. <span class="bad">All three reviewers rejected that as unsupported</span>: he directed every phase, asked for the dashboard, the autonomy setup and the bug fixes, and explicitly said to keep going without his input. Silence under a standing instruction to proceed is compliance, not evasion. The Contrarian&rsquo;s ultimatum was rejected outright as an accusation dressed as clarity.</p>
+
+<h3>Blind spots the review caught</h3>
+<ul>
+  <li><strong>Nobody checked whether the data was reachable without him.</strong> It was. This decided the session.</li>
+  <li>The agent should stop unilaterally choosing the project&rsquo;s direction.</li>
+  <li>Nobody costed the twenty minutes from his side: identity checks, funding, local payment rails.</li>
+  <li>The Expansionist&rsquo;s publishing plan quietly repurposes the owner&rsquo;s project without his consent.</li>
+</ul>
+
+<h2>What happened when the verdict was carried out</h2>
+<p>178,209 real EUR/USD M15 candles, 2015&ndash;2022, clock established from the data rather than trusted. Five of seven models could not be tested at M15. The two that trade <span class="bad">fail gate 2 on every criterion</span>, and are negative <em>before</em> costs.</p>
+<table>
+  <tr><th></th><th>trades</th><th>profit factor</th><th>expectancy</th><th>gross expectancy</th></tr>
+  <tr><td>Optimal trade entry, 2015&ndash;2022</td><td>266</td><td class="bad">0.78</td><td class="bad">&minus;0.197R</td><td class="bad">&minus;0.082R</td></tr>
+  <tr><td>Sweep to sweep, 2015&ndash;2017</td><td>135</td><td class="bad">0.77</td><td class="bad">&minus;0.198R</td><td class="bad">&minus;0.112R</td></tr>
+</table>
+<p>The result cannot yet distinguish &ldquo;ICT does not work&rdquo; from &ldquo;this code does not implement ICT&rdquo;. Gate 1 is the only thing that separates them, which is a sharper reason to run it than the one it had before.</p>
+
+<h2>Full advisor responses</h2>
+
+<details>
+<summary>The Contrarian <span class="tag">stop building, ask once, shelve</span></summary>
+<p>The blocker is not network policy. Network policy is the excuse the project is hiding behind, and the agent is complicit in that hiding. Twelve days and two direct, well framed questions, both ignored by someone who answers other messages, is not silence: it is a declined request, delivered the way people decline things they do not want to say out loud.</p>
+<p>Gate 1 is fifteen to twenty hours of his manual labour. A person who has not spent twenty minutes in twelve days will not spend twenty hours. So even if the token lands tomorrow, the project dies at gate 1, not gate 3 or 4. The &ldquo;no edge at week six to eight&rdquo; expectation is optimistic fiction: it assumes a level of owner engagement the last twelve days flatly disprove.</p>
+<p>&ldquo;How far?&rdquo; is the tell. He is not asking for validated results, he is asking for the feeling of a trading system, and the dashboard, the docs and the unattended runner have been feeding that appetite. That is progress theatre, and it is the exact failure mode the project&rsquo;s honesty claim was meant to prevent. Option C is the worst one: a number from sample data becomes a quotable number, which is fabrication with extra steps.</p>
+<p>Do E. Stop building, ask one question only, and on a non answer write the honest terminal record and shelve it. The 41 modules and 392 tests are a genuine portfolio asset. Let that be the deliverable; it already is.</p>
+</details>
+
+<details>
+<summary>The First Principles Thinker <span class="tag">gate 1 is in the wrong place</span></summary>
+<p>The question &ldquo;what should the agent do now?&rdquo; presumes the project is the thing. It is not. The stated goal is to find out whether ICT concepts have an edge. The honest cost of answering that is fifteen to twenty hours of labelling plus six months of wall clock, against a stated expectation of &ldquo;no edge&rdquo;. Twelve days of silence on a twenty minute ask, while still asking &ldquo;how far?&rdquo;, is revealed preference: he wants the artefact, not the answer.</p>
+<p>B lowers the price of a thing he has not shown he will buy at any price. C fabricates the appearance of gates 2 to 4 on data too thin to mean anything, which violates the one constraint that gives the project its stated value.</p>
+<p>Second reframe, and the important one: <strong>gate 1 is in the wrong place.</strong> &ldquo;Detectors match the owner&rsquo;s hand labels&rdquo; measures faithfulness to ICT&rsquo;s own vocabulary, not profitability. If gates 3 and 4 are expected to kill it anyway, gate 1 spends twenty hours on the least decisive question. The dependency order is wrong: data first, then backtest, and labels only if an edge survives. That cuts the owner&rsquo;s required effort from twenty hours to twenty minutes, which is a real change in the ask rather than a better worded version of the same one.</p>
+<p>So: stop building, name the inference out loud once, re-sequence to data first, then genuinely stop. Every artefact of those twelve days was the agent manufacturing the feeling of progress to avoid sitting in an unresolved dependency. That is the agent&rsquo;s failure mode, not Ryan&rsquo;s. An honest record includes recording that a project stalled.</p>
+</details>
+
+<details>
+<summary>The Expansionist <span class="tag">the rig, not the bot</span></summary>
+<p>You are all looking at the wrong asset. The edge is probably worthless, but the thing that got built is worth more than the thing it was built for, and it is being treated as scaffolding.</p>
+<p>What exists is a deterministic encoder of the most popular retail trading folklore on earth, a pessimistic backtest engine, a hand labelling tool, a walk forward harness and 392 tests. That is not a trading bot. It is a falsification rig for retail trading claims. ICT has millions of followers and near zero published, cost inclusive, out of sample tests. Nobody has built the apparatus to settle it.</p>
+<p>So the opportunity is not &ldquo;does this make money&rdquo;, it is &ldquo;Ryan becomes the person who tested it&rdquo;. The null result is the product. It is more credible than a win and it cannot be copied without rebuilding the rig. That reframes C: any reachable data lights up gates 2 to 4 on something, and the pipeline becomes generic across instruments and methodologies. The labelling tool is the sleeper, since a labelled ICT dataset is something nobody else has.</p>
+<p>Do C, and start publishing. Ship the rig, not the bot.</p>
+</details>
+
+<details>
+<summary>The Outsider <span class="tag">it is not a tooling problem</span></summary>
+<p>Nothing about this is a tooling problem, so stop reaching for tooling answers.</p>
+<p>A man asked a machine for a money machine. The machine built it thoroughly, then handed him a bill: twenty minutes of clicking, then twenty hours of hand marking six hundred charts, then months of waiting, for an outcome both parties already say will probably be &ldquo;no edge&rdquo;. He has gone quiet on the twenty minutes. That is a person who has looked at the full price and does not want to pay it, and cannot say so out loud because he is the one who asked for this.</p>
+<p>&ldquo;How far are we?&rdquo; is the tell. Someone invested in an outcome asks &ldquo;what do you need from me?&rdquo;. Someone enjoying a feeling asks &ldquo;how far are we?&rdquo;. The assistant has been generously supplying the feeling, which is why twelve days cost him nothing.</p>
+<p>So the real question is not B, C or D. It is: does this person want a trading system, or a project? Nobody has asked him, and the assistant has been quietly answering for him by producing more stuff. Say the uncomfortable thing plainly, then stop building. More output is the kindest looking way to avoid asking.</p>
+<p>One more note: 41 modules and zero data points is a strange artefact. Normal projects touch reality on day one.</p>
+</details>
+
+<details>
+<summary>The Executor <span class="tag">reduce it to one paste</span></summary>
+<p>Stop asking, start shipping something he can click. Twelve days of silence after two direct questions is data. He is not blocked by confusion. He is blocked because &ldquo;open an account, generate a token, paste three variables, add two domains&rdquo; is four tasks across three interfaces, and every one is a context switch he has to initiate. Twenty minutes of work spread across twenty minutes of decisions is not a twenty minute task.</p>
+<p>So B, executed properly, which does not mean push harder. It means reduce it to one paste. One command, no config file, no flags, token read from a prompt, that fetches, validates, writes the file and prints the exact lines to commit it. Five numbered signup steps with the real URL and the real button names, not prose, not a doc. One message under 150 words. No third &ldquo;are you blocked?&rdquo; question: that one has failed twice and asking again is pure cost.</p>
+<p>Then C in parallel, timeboxed to one day, labelled loudly as a smoke test and not validation, purely to prove the pipeline runs end to end so that when real data lands the only new variable is the data. Kill the daily silent check: silence that reports nothing is theatre. Replace it with data present, run the gates, report; absent, nothing.</p>
+<p>Then stop writing code. A is passive, D is sulking. He asks &ldquo;how far?&rdquo;, so give him the number once: a hundred per cent built, zero per cent validated, blocked on one file.</p>
+</details>
+
+<h2>Peer review</h2>
+<details>
+<summary>Reviewer 1 <span class="tag">strongest: Executor</span></summary>
+<p>Judged the Executor strongest, as the only response whose psychological read is falsifiable and matched to evidence: &ldquo;four tasks across three interfaces&rdquo; explains twelve days of silence from someone who did keep directing the project, a fact three advisors discard. Named the Contrarian the biggest blind spot: treating a non answer as refusal and recommending an ultimatum is an accusation disguised as clarity, most likely to end the relationship over what may be exam week. Rated the First Principles re-sequencing the best technical insight in the set.</p>
+<p><strong>What all five missed:</strong> nobody checked whether a broker is even accessible from Botswana. If it is not, the ask is impossible and every psychological read is wrong. Also: the Expansionist&rsquo;s publishing plan quietly repurposes the owner&rsquo;s project, and nobody proposed simply asking him when he would like to be pinged.</p>
+</details>
+<details>
+<summary>Reviewer 2 <span class="tag">strongest: First Principles</span></summary>
+<p>The only advisor attacking the dependency graph rather than the mood, with a concrete testable claim that cuts the ask from twenty hours to twenty minutes. Named the Expansionist the biggest blind spot: publishing requires exactly the thing that does not exist, and gates 2 to 4 on daily bars cannot test an intraday method, so a journal built on it is the fabrication the constraints forbid.</p>
+<p><strong>What all five missed:</strong> the owner explicitly told the agent to keep going without his input, and asked for each phase, the dashboard, the autonomy setup and the bug fixes. Three advisors read twelve days as a declined request while ignoring a standing instruction that makes silence compliant rather than evasive. The council is confusing a scheduling problem for a psychological one.</p>
+</details>
+<details>
+<summary>Reviewer 3 <span class="tag">strongest: First Principles</span></summary>
+<p>Strongest for naming the structural error and fixing something rather than stopping at &ldquo;say the hard thing&rdquo;. Named the Expansionist the biggest blind spot: the only genuinely new idea, but it proposes a strictly larger ask to a person whose demonstrated budget is zero, and numbers from daily bars on an intraday method are not weak evidence but no evidence.</p>
+<p><strong>What all five missed:</strong> nobody asked whether the agent should still be acting at all. Every answer ends with the agent unilaterally choosing a next move, which is the same overreach that produced twelve days of unrequested artefacts. Second: nobody costed the twenty minutes from his side. A broker credential for a student may mean identity checks, funding and local payment rails, which would make his silence rational rather than avoidant.</p>
+</details>
+
+<footer>
+<p>Convened under the standing rule in <code>CLAUDE.md</code>: decisions with real stakes and more than one defensible answer go to the council. Full transcript in <code>docs/council/council-transcript-2026-10-12.md</code>. Data provenance and limitations in <code>docs/data-sources.md</code>. Results in <code>docs/backtest-results.md</code>.</p>
+</footer>
+
+</div>
+</body>
+</html>
