@@ -46,6 +46,7 @@ COLUMNS = (
     "review_action",
     "review_reason",
     "source",
+    "broker_trade_id",
 )
 
 
@@ -75,6 +76,9 @@ class Entry:
     #: "backtest", "paper" or "live". Mixing them in one file without saying
     #: which is which is how a paper record becomes a live claim.
     source: str = "backtest"
+    #: The broker's own id for the trade, so a restart can tell what it has
+    #: already written. Empty for a backtest, which has no broker.
+    broker_trade_id: str = ""
 
 
 @dataclass
