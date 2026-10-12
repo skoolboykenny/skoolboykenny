@@ -71,8 +71,10 @@ def test_an_order_cannot_fill_on_the_candle_it_was_placed_from():
 
 
 def test_a_limit_order_fills_when_price_trades_through_it():
+    # The low stops above the order's stop of 99, so the fill candle resolves
+    # nothing and the position is still open at the end of it.
     candles = make_candles(
-        [(100, 101, 98, 100), (100, 101, 99, 100)], start="2024-03-04 08:00"
+        [(100, 101, 98, 100), (100, 101, 99.4, 100)], start="2024-03-04 08:00"
     )
     broker = Broker(costs=free_costs())
     broker.place(order(limit=99.5))
@@ -81,6 +83,51 @@ def test_a_limit_order_fills_when_price_trades_through_it():
 
     assert broker.position is not None
     assert broker.position.entry == 99.5
+
+
+def test_the_candle_that_fills_an_order_can_also_stop_it():
+    """A fill is not a safe harbour, and this was booking wins as losses' opposite.
+
+    The candle that reached the limit may have carried on through the stop.
+    Leaving the position open until the next candle is the optimistic reading
+    this module exists to refuse: a trade that should book -1R booked +3R.
+    """
+    candles = make_candles(
+        [(100, 101, 98, 100), (100, 101, 97, 100)], start="2024-03-04 08:00"
+    )
+    broker = Broker(costs=free_costs())
+    broker.place(order(limit=99.5, stop=99.0, target=103.0))
+
+    broker.on_candle(candles.index[1], candles.iloc[1])
+
+    assert broker.position is None
+    assert len(broker.trades) == 1
+    assert broker.trades[0].outcome == "stop"
+    assert broker.trades[0].r_multiple == pytest.approx(-1.0)
+
+
+def test_the_candle_that_fills_an_order_can_also_reach_the_target():
+    candles = make_candles(
+        [(100, 101, 98, 100), (100, 104, 99.4, 103)], start="2024-03-04 08:00"
+    )
+    broker = Broker(costs=free_costs())
+    broker.place(order(limit=99.5, stop=99.0, target=103.0))
+
+    broker.on_candle(candles.index[1], candles.iloc[1])
+
+    assert broker.trades[0].outcome == "target"
+
+
+def test_when_the_fill_candle_spans_both_the_stop_still_wins():
+    candles = make_candles(
+        [(100, 101, 98, 100), (100, 104, 97, 100)], start="2024-03-04 08:00"
+    )
+    broker = Broker(costs=free_costs())
+    broker.place(order(limit=99.5, stop=99.0, target=103.0))
+
+    broker.on_candle(candles.index[1], candles.iloc[1])
+
+    assert broker.trades[0].outcome == "stop"
 
 
 def test_an_unfilled_order_expires():
@@ -536,3 +583,77 @@ def test_the_strategy_never_rests_an_order_at_a_spent_gap():
 
     if checked == 0:
         pytest.skip("no setups in this fixture")
+
+
+# --- a trade belongs to the session it was opened in -------------------------
+
+
+def test_a_trade_is_booked_to_the_day_it_was_opened():
+    """Booking to the closing day spent the next session's limits.
+
+    A position carried past New York midnight consumed the following day's
+    trade cap and tripped its one loss per session, while the day that
+    actually took the trade recorded nothing.
+    """
+    from datetime import date
+
+    from ict.backtest.risk import RiskConfig, RiskManager
+
+    manager = RiskManager(config=RiskConfig(), starting_equity=10_000.0)
+    monday, tuesday = date(2024, 3, 4), date(2024, 3, 5)
+
+    manager.start_day(monday)
+    manager.start_day(tuesday)          # the trade is still open overnight
+    manager.record(-100.0, opened_on=monday)
+
+    assert manager.days[monday].trades == 1
+    assert manager.days[monday].losses == 1
+    assert manager.days[tuesday].trades == 0
+    assert manager.days[tuesday].losses == 0
+    # Tuesday may still trade; Monday's loss is Monday's.
+    assert manager.may_trade()
+
+
+def test_a_day_revisited_keeps_its_tally():
+    """start_day must not wipe a day that is already underway."""
+    from datetime import date
+
+    from ict.backtest.risk import RiskConfig, RiskManager
+
+    manager = RiskManager(config=RiskConfig(), starting_equity=10_000.0)
+    day = date(2024, 3, 4)
+    manager.start_day(day)
+    manager.record(-50.0, opened_on=day)
+    manager.start_day(day)
+    assert manager.day.trades == 1
+
+
+def test_recording_without_a_day_still_books_to_the_current_one():
+    from datetime import date
+
+    from ict.backtest.risk import RiskConfig, RiskManager
+
+    manager = RiskManager(config=RiskConfig(), starting_equity=10_000.0)
+    manager.start_day(date(2024, 3, 4))
+    manager.record(-25.0)
+    assert manager.day.trades == 1
+
+
+# --- counts that mean different things are reported separately --------------
+
+
+def test_candle_counts_and_decision_counts_are_not_added_together():
+    """A risk limit's per candle total read as thousands of refused trades."""
+    from ict.cli import synthetic_candles
+
+    result = run(synthetic_candles(days=30), strategy="turtle_soup")
+    assert "stop inside cost" not in result.blocked
+    if result.refused:
+        assert set(result.refused) <= {"stop inside cost", "review layer"}
+
+    text = report(result, measure(result))
+    if result.blocked:
+        assert "Candles where no entry was allowed" in text
+        assert "These count candles, not trades turned away" in text
+    if result.refused:
+        assert "Setups refused" in text
