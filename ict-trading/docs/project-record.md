@@ -3,7 +3,7 @@
 Owner: Ryan Kenaope
 Planned: 20 September 2026 · Build record updated: 23 September 2026
 
-This file brings together the conversation summary, the agreed outcomes, the full research and build plan, the automation design and the Claude Code handoff brief.
+This file brings together the conversation summary, the agreed outcomes, the full research and build plan, the automation design and the Kenaope handoff brief.
 
 **Parts 1 to 5 are the plan as it was agreed, and are left as written.** They are the record of what was intended, which is worth keeping separable from what was done. [Part 6](#part-6-what-was-built) is the build record: what exists, where it departed from the plan and why, and what the plan got wrong.
 
@@ -41,7 +41,7 @@ Build a trading tool covering all ICT concepts, with an AI model that reads char
 10. **Risk rules in code** that the AI cannot override.
 11. **Council verdict:** build the rule engine and backtester first, ship it as a portfolio piece, and treat the AI decision layer as a later filter that must earn its place with data.
 12. **Autonomous operation** on a VPS with a daily loop, self monitoring, alerts and a kill switch.
-13. **Handoff to Claude Code** for Phase 1 through a `CLAUDE.md` brief.
+13. **Handoff to the build agent** for Phase 1 through a `KENAOPE.md` brief.
 
 ---
 
@@ -340,9 +340,9 @@ Every decision, including skipped ones, is logged. If skipped trades would have 
 
 ---
 
-# Part 4: Claude Code Handoff Brief
+# Part 4: Kenaope Handoff Brief
 
-The Phase 1 brief lives at the repository root as [`CLAUDE.md`](../CLAUDE.md).
+The Phase 1 brief lives at the repository root as [`KENAOPE.md`](../KENAOPE.md).
 
 ---
 
@@ -350,8 +350,8 @@ The Phase 1 brief lives at the repository root as [`CLAUDE.md`](../CLAUDE.md).
 
 *As written on 20 September. Steps 1, 2 and 4 are done; 3 and 5 are superseded by Part 6.*
 
-1. Create an `ict-trading` folder, run `git init`, and add the brief as `CLAUDE.md`.
-2. Open Claude Code in the folder and send: "Read CLAUDE.md and build Phase 1. Start with the data loader and resampler, then the detectors with tests."
+1. Create an `ict-trading` folder, run `git init`, and add the brief as `KENAOPE.md`.
+2. Open the build agent in the folder and send: "Read KENAOPE.md and build Phase 1. Start with the data loader and resampler, then the detectors with tests."
 3. Download a few months of EUR/USD 1 minute data from Dukascopy or HistData into `data/`.
 4. Push the repository to GitHub and link it from the portfolio page.
 5. Review the detector plots against ICT's definitions before starting the Silver Bullet backtest.
@@ -455,4 +455,4 @@ Written up in [`walk-forward.md`](walk-forward.md) and [`backtest-results.md`](b
 | [`dashboard.md`](dashboard.md) | The dashboard, and why the kill switch is not on it |
 | [`walk-forward.md`](walk-forward.md) | The seven models ranked out of sample, and why the ranking means nothing yet |
 | [`backtest-results.md`](backtest-results.md) | The Phase 2 Silver Bullet run |
-| [`../CLAUDE.md`](../CLAUDE.md) | The build brief and a phase by phase record of decisions |
+| [`../KENAOPE.md`](../KENAOPE.md) | The build brief and a phase by phase record of decisions |

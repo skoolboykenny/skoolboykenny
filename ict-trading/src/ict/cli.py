@@ -712,15 +712,15 @@ def _news_gate(args: argparse.Namespace):
 
 def _reviewer(args: argparse.Namespace):
     """Build the review layer named on the command line."""
-    from .review import AlwaysTake, ClaudeReviewer, RuleReviewer
+    from .review import AlwaysTake, KenaopeReviewer, RuleReviewer
 
     choice = getattr(args, "review", "off")
     if choice in (None, "off"):
         return None
     if choice == "rules":
         return RuleReviewer()
-    if choice == "claude":
-        return ClaudeReviewer()
+    if choice == "kenaope":
+        return KenaopeReviewer()
     return AlwaysTake()
 
 
@@ -1129,7 +1129,7 @@ def build_parser() -> argparse.ArgumentParser:
     backtest.add_argument("--blackout-minutes", type=int, default=15)
     backtest.add_argument("--block-fomc-day", action="store_true")
     backtest.add_argument(
-        "--review", default="off", choices=["off", "rules", "claude"],
+        "--review", default="off", choices=["off", "rules", "kenaope"],
         help="the AI review layer; it may only skip or shrink a trade",
     )
     backtest.add_argument(
@@ -1266,7 +1266,7 @@ def build_parser() -> argparse.ArgumentParser:
     live.add_argument("--blackout-minutes", type=int, default=15)
     live.add_argument("--block-fomc-day", action="store_true")
     live.add_argument(
-        "--review", default="off", choices=["off", "rules", "claude"],
+        "--review", default="off", choices=["off", "rules", "kenaope"],
         help="the AI review layer; it may only skip or shrink a trade",
     )
     live.add_argument(
