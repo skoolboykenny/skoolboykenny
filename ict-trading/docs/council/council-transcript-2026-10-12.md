@@ -1,6 +1,6 @@
 # Council session: what to do about the twelve day block
 
-Run on 2026-10-12, under the standing rule in `CLAUDE.md` that decisions with
+Run on 2026-10-12, under the standing rule in `KENAOPE.md` that decisions with
 real stakes and more than one defensible answer go to the council.
 
 ## The question put to the council
