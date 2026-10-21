@@ -104,8 +104,10 @@ Three reviewers:
   trading against the daily bias. Every rule can be stated in a sentence and
   argued with, which is more than can be said for a paragraph of generated
   prose.
-- `claude`. Sends the structured request to the Anthropic API. Needs
-  `ANTHROPIC_API_KEY` in the environment. An API error, a timeout or an
+- `kenaope`. Sends the structured request to the Anthropic API. Needs
+  `ANTHROPIC_API_KEY` and `ICT_REVIEW_MODEL` in the environment, the second
+  being the vendor's own model identifier, which is a wire protocol value and
+  so is not written into the repository. An API error, a timeout or an
   unparseable answer produces a take, so the layer breaking never becomes a
   source of missed trades.
 

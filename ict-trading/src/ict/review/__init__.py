@@ -12,7 +12,7 @@ from .audit import Audit, Decision, Journal, audit
 from .reviewers import (
     SYSTEM_PROMPT,
     AlwaysTake,
-    ClaudeReviewer,
+    KenaopeReviewer,
     Reviewer,
     RuleReviewer,
     parse_verdict,
@@ -23,7 +23,7 @@ __all__ = [
     "ACTIONS",
     "AlwaysTake",
     "Audit",
-    "ClaudeReviewer",
+    "KenaopeReviewer",
     "Decision",
     "Journal",
     "ReviewRequest",

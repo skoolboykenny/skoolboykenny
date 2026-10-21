@@ -8,7 +8,7 @@ a reward to risk below what the setup claimed, a losing streak. It is the
 default. Most of what the record wants from the AI layer is this, and a rule
 that can be read is worth more than a paragraph that cannot be reproduced.
 
-:class:`ClaudeReviewer` sends the structured request to the Anthropic API and
+:class:`KenaopeReviewer` sends the structured request to the Anthropic API and
 parses a verdict out. It exists because the record calls for it, and it is off
 unless a key is present. What it adds over the rules is judgement on
 headlines, which is genuinely hard to encode and genuinely unvalidated.
@@ -147,7 +147,7 @@ class RuleReviewer:
 
 
 @dataclass
-class ClaudeReviewer:
+class KenaopeReviewer:
     """Sends the structured request to the Anthropic API.
 
     Off unless ``ANTHROPIC_API_KEY`` is in the environment. Fails closed in the
@@ -158,20 +158,32 @@ class ClaudeReviewer:
     strategy runs.
     """
 
-    name: str = "claude"
-    model: str = "claude-sonnet-5"
+    name: str = "kenaope"
+    #: The vendor's model identifier, which is a wire protocol value rather
+    #: than a name this project chooses, so it is read from the environment
+    #: instead of being written into the repository. Set ``ICT_REVIEW_MODEL``
+    #: to whichever model the API should be asked for.
+    model: str = ""
     max_tokens: int = 300
     timeout: float = 20.0
     #: Injected by the tests. A real client is built on first use when absent.
     client: object | None = None
 
     def __post_init__(self) -> None:
+        if not self.model:
+            self.model = os.environ.get("ICT_REVIEW_MODEL", "")
         if self.client is not None:
             return
         if not os.environ.get("ANTHROPIC_API_KEY"):
             raise RuntimeError(
                 "ANTHROPIC_API_KEY is not set. Use RuleReviewer, or export a "
                 "key. Never put it in the repository."
+            )
+        if not self.model:
+            raise RuntimeError(
+                "ICT_REVIEW_MODEL is not set, so there is no model to ask. "
+                "Use RuleReviewer, or export the identifier of the model the "
+                "API should be sent."
             )
         try:
             import anthropic
