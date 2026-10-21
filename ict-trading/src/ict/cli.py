@@ -1023,7 +1023,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     ingest = sub.add_parser("ingest", help="read vendor CSVs into a Parquet store")
     ingest.add_argument("paths", nargs="+")
-    ingest.add_argument("--source", default="histdata", choices=["histdata", "dukascopy"])
+    ingest.add_argument(
+        "--source",
+        default="histdata",
+        choices=["histdata", "dukascopy", "mirror"],
+    )
     ingest.add_argument("--out", required=True)
     ingest.set_defaults(func=cmd_ingest)
 
