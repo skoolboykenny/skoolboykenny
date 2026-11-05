@@ -73,6 +73,18 @@ Before 2015 the same file closes the week at 22:45 most weeks, which is a
 different clock, so the file is two series stitched together. Rather than
 guess the earlier offset, everything before 2015-01-01 is dropped.
 
+### Its price scale is per symbol
+
+The mirror quotes prices as integer points, and the divisor is 10 to the power
+of the symbol's quoted digits: 100,000 for the major dollar pairs, 1,000 for
+the yen crosses, 100 for gold. The reader looks this up per symbol and refuses
+an unrecognised one rather than guessing, because a wrong scale does not fail
+loudly. The detectors work in multiples of ATR and so are scale invariant,
+while the spread and slippage in the cost model are absolute prices, so a yen
+pair loaded at the dollar scale produces a full set of trades against costs a
+thousand times too large relative to price. `--point-scale` overrides the
+lookup.
+
 ### What is wrong with it
 
 These are limitations of the result, not caveats to be skipped over.

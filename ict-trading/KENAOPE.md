@@ -539,6 +539,47 @@ Botswana. The region selector lists it; OANDA Global Markets' eligible
 countries page reportedly does not, and that page is on a blocked domain so it
 could not be checked from here.
 
+## Four instruments, November 2026
+
+The gate 2 result rested on one instrument, which `docs/data-sources.md` had
+already named as its weakness. The two models that trade at M15 were run
+across EUR/USD, GBP/USD, USD/JPY and gold over the same span.
+
+**A silent bug surfaced doing it.** The mirror quotes integer points and the
+reader divided every symbol by 100,000, which is right for the major dollar
+pairs and wrong for the yen crosses and gold. It would not have failed loudly:
+the detectors work in multiples of ATR and are scale invariant, so they would
+have traded normally, while the cost model is in absolute prices, so a yen
+pair would have carried costs a thousand times too large and looked like a
+catastrophic edge rather than a broken load. The scale is now per symbol, an
+unknown symbol is refused rather than guessed, and `--point-scale` overrides
+it. Prices were checked against known history afterwards: GBP/USD bottoms at
+the Brexit low, gold spans the December 2015 low to the August 2020 high.
+
+**The negative finding held and is now far better evidenced.** Six of eight
+cells lose after costs, five of eight lose before costs, and EUR/USD
+reproduced the earlier run exactly, which is what made the rest of the table
+worth reading.
+
+**USD/JPY is the exception and is positive on both models.** Sweep to sweep
+reaches a 1.24 profit factor, +0.200R and an 11.8% drawdown over 226 trades:
+it clears the trade count and the drawdown limit and falls short of the 1.3
+profit factor the gate asks for. It is positive before costs by a wider margin
+than after, and every instrument was given the same relative cost, so it is
+not an artifact of either.
+
+**Gate 3 was deliberately not run on it.** Gate 2 did not pass, a failed gate
+is not a passed gate, and walk forward is precisely the gate that kills a
+result produced by picking the best instrument out of eight cells. Two models
+agreeing on one instrument is also weaker than it looks, because they read the
+same sweeps on the same bars. What USD/JPY has earned is a decision about
+whether one instrument is worth walking forward knowing the selection bias,
+and how to discount it if it survives. Under the council rule that is the
+owner's call and the council's, not a unilateral next run.
+
+Nothing here touches gate 1. These numbers still cannot separate a finding
+about ICT from a finding about this code.
+
 ## Later phases (do not build yet)
 
 1. Live only after every gate in `docs/live.md` passes.

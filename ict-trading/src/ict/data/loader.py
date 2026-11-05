@@ -47,8 +47,50 @@ MIRROR_TZ = "Europe/Riga"
 #: and robustness work.
 MIRROR_FIRST_DAY = pd.Timestamp("2015-01-01", tz=STORAGE_TZ)
 
-#: The mirror quotes prices as integer points, so 127362.0 means 1.27362.
+#: The mirror quotes prices as integer points, so for EUR/USD 127362.0 means
+#: 1.27362. The divisor is **not** the same for every symbol: it is 10 to the
+#: power of the symbol's quoted digits, which is 5 for the major dollar pairs,
+#: 3 for the yen crosses and 2 for gold. Getting it wrong is quiet rather than
+#: loud, because the detectors work in multiples of ATR and so are scale
+#: invariant, while the spread and slippage in the cost model are absolute
+#: prices. A yen pair read at the dollar scale therefore still produces trades,
+#: with costs a thousand times too large relative to price. So the scale is
+#: looked up per symbol and an unknown symbol is refused rather than guessed.
 MIRROR_POINT_SCALE = 100_000
+
+#: Divisor by symbol, keyed on the symbol as the mirror names its folders.
+MIRROR_POINT_SCALES = {
+    "AUDJPY": 1_000,
+    "AUDUSD": 100_000,
+    "EURCHF": 100_000,
+    "EURGBP": 100_000,
+    "EURJPY": 1_000,
+    "EURUSD": 100_000,
+    "GBPJPY": 1_000,
+    "GBPUSD": 100_000,
+    "USDCAD": 100_000,
+    "USDCHF": 100_000,
+    "USDJPY": 1_000,
+    "XAUUSD": 100,
+}
+
+
+def mirror_point_scale(name: str) -> int:
+    """The divisor for a mirror file, read off the symbol in its name.
+
+    Raises rather than falling back, because a wrong scale does not fail: it
+    produces a full set of trades priced against costs that are off by orders
+    of magnitude.
+    """
+    upper = str(name).upper()
+    for symbol, scale in MIRROR_POINT_SCALES.items():
+        if symbol in upper:
+            return scale
+    raise ValueError(
+        f"cannot tell the point scale for {name!r}: no known symbol in the "
+        f"name. Pass point_scale explicitly. Known symbols: "
+        f"{', '.join(sorted(MIRROR_POINT_SCALES))}"
+    )
 
 
 @dataclass(frozen=True)
@@ -133,7 +175,9 @@ def read_dukascopy_csv(path: str | Path) -> pd.DataFrame:
     return frame
 
 
-def read_mirror_csv(path: str | Path) -> pd.DataFrame:
+def read_mirror_csv(
+    path: str | Path, point_scale: int | None = None
+) -> pd.DataFrame:
     """Read one CSV from the GitHub forex mirror into a UTC indexed frame.
 
     The mirror's own columns are ``Date,open,high,low,close,tick_volume``,
@@ -170,11 +214,13 @@ def read_mirror_csv(path: str | Path) -> pd.DataFrame:
     if missing:
         raise ValueError(f"missing columns {missing} in {path}")
 
+    scale = point_scale if point_scale is not None else mirror_point_scale(path)
+
     frame = raw[list(OHLC_COLUMNS)].copy()
     for column in ("open", "high", "low", "close"):
         # Round before scaling: the mirror carries float representation noise
         # such as 127456.00000000001, which is an integer point count.
-        frame[column] = frame[column].round() / MIRROR_POINT_SCALE
+        frame[column] = frame[column].round() / scale
     frame.index = pd.DatetimeIndex(index, name="timestamp")
     return frame.loc[frame.index >= MIRROR_FIRST_DAY]
 
@@ -235,13 +281,24 @@ def clean(frame: pd.DataFrame) -> tuple[pd.DataFrame, LoadReport]:
 
 
 def load_csvs(
-    paths: list[str | Path], source: str = "histdata"
+    paths: list[str | Path],
+    source: str = "histdata",
+    point_scale: int | None = None,
 ) -> tuple[pd.DataFrame, LoadReport]:
-    """Read and clean one or more vendor CSVs into a single candle frame."""
+    """Read and clean one or more vendor CSVs into a single candle frame.
+
+    ``point_scale`` applies to the ``mirror`` source only, where it overrides
+    the divisor otherwise read from the symbol in each filename.
+    """
     if source not in _READERS:
         raise ValueError(f"unknown source {source!r}, expected one of {list(_READERS)}")
+    if point_scale is not None and source != "mirror":
+        raise ValueError("point_scale applies to the mirror source only")
     reader = _READERS[source]
-    frames = [reader(p) for p in paths]
+    if source == "mirror":
+        frames = [reader(p, point_scale=point_scale) for p in paths]
+    else:
+        frames = [reader(p) for p in paths]
     if not frames:
         raise ValueError("no input files given")
     return clean(pd.concat(frames))

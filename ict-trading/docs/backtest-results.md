@@ -246,3 +246,98 @@ In rough order of how much they would change it:
 
 Gates 3 to 6 were not run. Gate 2 failed, and the project's own rule is that a
 failed gate is not a gate that passed.
+
+---
+
+# Four instruments, 5 November 2026
+
+The gate 2 result above rested on one instrument, and `docs/data-sources.md`
+named that as its weakness: one undocumented broker feed at one granularity is
+one sample of one. The mirror carries twelve symbols, so the two models that
+trade at M15 were run across four of them over the same 2015 to 2022 span.
+
+## A bug found on the way
+
+The mirror quotes prices as integer points, and the reader divided every
+symbol by 100,000. That is right for the major dollar pairs and wrong for the
+yen crosses, which are quoted to three digits, and for gold, quoted to two.
+USD/JPY read at the dollar scale gives 0.80163 where the price is 80.163.
+
+This would not have failed loudly. The detectors work in multiples of ATR and
+are therefore scale invariant, so they would have produced a full set of
+trades. The spread and slippage in the cost model are absolute prices, so the
+costs would have been a thousand times too large relative to price, and the
+result would have looked like a catastrophic edge rather than a broken load.
+
+The scale is now looked up per symbol, an unknown symbol is refused rather
+than guessed, and `--point-scale` overrides it. Prices were then checked
+against known history: GBP/USD bottoms at 1.1417, which is the Brexit low;
+gold spans 1047 to 2070, which is the December 2015 low to the August 2020
+high.
+
+## The results
+
+Costs set per instrument, because a pip is 0.0001 on EUR/USD and 0.01 on
+USD/JPY while gold trades in dollars. EUR/USD 1.2 pips, GBP/USD 1.5, USD/JPY
+1.2, gold 30 cents, each with slippage near a sixth of the spread. In relative
+terms these are all close to 1.1 basis points, so no instrument was given a
+cheaper ride than another.
+
+| Instrument | Model | Trades | Profit factor | Expectancy | Drawdown |
+|---|---|---|---|---|---|
+| EUR/USD | optimal trade entry | 266 | 0.78 | -0.197R | 37.3% |
+| GBP/USD | optimal trade entry | 293 | 0.55 | -0.403R | 47.9% |
+| USD/JPY | optimal trade entry | 167 | 1.04 | +0.054R | 11.7% |
+| Gold | optimal trade entry | 179 | 0.73 | -0.252R | 25.3% |
+| EUR/USD | sweep to sweep | 303 | 0.83 | -0.140R | 25.1% |
+| GBP/USD | sweep to sweep | 289 | 0.71 | -0.230R | 36.4% |
+| USD/JPY | sweep to sweep | 226 | **1.24** | **+0.200R** | 11.8% |
+| Gold | sweep to sweep | 218 | 0.93 | -0.048R | 12.7% |
+
+EUR/USD reproduces the earlier run exactly, which is the reproducibility check
+this table needed before any of the rest of it means anything.
+
+Before costs:
+
+| Instrument | OTE gross | Sweep to sweep gross |
+|---|---|---|
+| EUR/USD | -0.082R | -0.041R |
+| GBP/USD | -0.243R | -0.139R |
+| USD/JPY | **+0.151R** | **+0.298R** |
+| Gold | -0.125R | +0.039R |
+
+## What it says
+
+**The negative finding holds, and is now much better evidenced.** Six of eight
+cells are negative after costs, five of eight are negative before costs, and
+the two largest samples on the two most liquid pairs fail decisively on every
+criterion. This is no longer one instrument's result.
+
+**USD/JPY is the exception, and it is positive on both models.** Sweep to
+sweep reaches a 1.24 profit factor, +0.200R expectancy and an 11.8% drawdown
+over 226 trades, which clears the trade count and the drawdown limit and falls
+short on profit factor, where the gate asks for 1.3. It is positive before
+costs by a wider margin than it is after, so it is not a cost artifact, and
+the per-instrument costs were set to the same relative level everywhere so it
+was not handed a cheaper ride.
+
+**It still does not pass, and it should not be treated as an edge.** Running
+eight cells and reporting the best one is the multiple comparisons trap, and a
+single marginal pass out of eight is exactly what noise produces. Two models
+agreeing on the same instrument is weaker evidence than it looks, because they
+read the same sweeps on the same bars and their trades are not independent.
+
+So gate 3 was **not** run on it. Gate 2 did not pass, the project's own rule is
+that a failed gate is not a passed gate, and walk forward is specifically the
+gate that kills a result which came from picking the best instrument. Moving
+to it now, on the one cell that looked good, would be using the gates in the
+order that flatters rather than the order that tests.
+
+What USD/JPY has earned is a decision, not a promotion: whether it is worth
+putting one instrument through walk forward knowing the selection bias, and
+how that result should be discounted if it survives. Under the rule in
+`KENAOPE.md` that belongs to the council and to the owner, not to a unilateral
+next run.
+
+Nothing here changes gate 1. Every number above still cannot distinguish a
+finding about ICT from a finding about this code.

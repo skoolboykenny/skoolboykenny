@@ -21,7 +21,7 @@ answer is no on the data available.
 | Gate | State |
 | --- | --- |
 | 1. Detectors agree with hand labels 90% | **Not started.** The tooling is built; the labelling is manual |
-| 2. Three years in sample, with costs | **Failed on real data.** Profit factor 0.77 to 0.85, expectancy around -0.2R |
+| 2. Three years in sample, with costs | **Failed on real data**, across four instruments and two models. One cell, USD/JPY, falls just short rather than failing |
 | 3. Walk forward, out of sample only | Not run: gate 2 failed |
 | 4. Robustness: sensitivity and Monte Carlo | Not run: gate 2 failed |
 | 5. Paper trading, 3 months or 100 trades | Built, never run. Needs a broker |
@@ -36,8 +36,13 @@ the one host this build environment can reach. See
 
 On 178,209 real candles from 2015 to 2022, five of the seven models could not
 be tested at all, because M15 is too coarse for a setup that has to fit inside
-a one hour window. The two that trade, optimal trade entry and sweep to sweep,
-fail every pass criterion and are negative **before** costs. Full numbers in
+a one hour window. The two that trade were then run across EUR/USD, GBP/USD,
+USD/JPY and gold: six of eight cells lose money after costs and five of eight
+lose before costs, with the two most liquid pairs failing decisively. USD/JPY
+is the one exception and is positive on both models, reaching a 1.24 profit
+factor against the 1.3 the gate asks for. It is **not** being treated as an
+edge: one marginal result out of eight is what noise looks like, and walk
+forward was deliberately not run on it. Full numbers and the reasoning in
 [`docs/backtest-results.md`](docs/backtest-results.md).
 
 **This does not mean ICT has no edge, and the reason matters.** Until the

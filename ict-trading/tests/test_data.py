@@ -259,3 +259,58 @@ def test_mirror_reader_refuses_stamps_that_carry_a_timezone(tmp_path):
 
     with pytest.raises(ValueError, match="double convert"):
         read_mirror_csv(path)
+
+
+def test_mirror_point_scale_differs_by_symbol():
+    """A yen pair and gold are not quoted to the same digits as EUR/USD."""
+    from ict.data import mirror_point_scale
+
+    assert mirror_point_scale("EURUSD/EURUSDm15.csv") == 100_000
+    assert mirror_point_scale("GBPUSD/GBPUSDm15.csv") == 100_000
+    assert mirror_point_scale("USDJPY/USDJPYm15.csv") == 1_000
+    assert mirror_point_scale("XAUUSD/XAUUSDm15.csv") == 100
+
+
+def test_an_unknown_mirror_symbol_is_refused_rather_than_guessed():
+    """A wrong scale produces trades priced against nonsense costs, quietly."""
+    from ict.data import mirror_point_scale
+
+    with pytest.raises(ValueError, match="cannot tell the point scale"):
+        mirror_point_scale("MYSTERY/MYSTERYm15.csv")
+
+
+def test_the_mirror_reader_scales_a_yen_pair_by_its_own_digits(tmp_path):
+    """80163 is 80.163 for USD/JPY, not 0.80163."""
+    from ict.data import read_mirror_csv
+
+    path = tmp_path / "USDJPYm15.csv"
+    path.write_text(
+        "Date,open,high,low,close,tick_volume\n"
+        "2015-06-02 10:00:00,80163.0,80207.0,80145.0,80205.0,632\n"
+    )
+
+    frame = read_mirror_csv(path)
+
+    assert frame["open"].iloc[0] == pytest.approx(80.163)
+    assert frame["close"].iloc[0] == pytest.approx(80.205)
+
+
+def test_an_explicit_point_scale_overrides_the_symbol_lookup(tmp_path):
+    """So an unrecognised file can still be loaded by saying what it is."""
+    from ict.data import read_mirror_csv
+
+    path = tmp_path / "MYSTERYm15.csv"
+    path.write_text(
+        "Date,open,high,low,close,tick_volume\n"
+        "2015-06-02 10:00:00,155408.0,155463.0,155397.0,155450.0,595\n"
+    )
+
+    frame = read_mirror_csv(path, point_scale=100)
+
+    assert frame["open"].iloc[0] == pytest.approx(1554.08)
+
+
+def test_point_scale_is_rejected_for_sources_that_have_none():
+    """It is a mirror concept, so asking for it elsewhere is a mistake."""
+    with pytest.raises(ValueError, match="mirror source only"):
+        load_csvs(["anything.csv"], source="histdata", point_scale=100)

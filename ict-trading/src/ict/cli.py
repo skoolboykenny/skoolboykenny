@@ -54,7 +54,11 @@ def _day_slice(candles: pd.DataFrame, day: str) -> pd.DataFrame:
 
 def cmd_ingest(args: argparse.Namespace) -> int:
     """Read vendor CSVs into a cleaned Parquet store."""
-    candles, report = load_csvs(args.paths, source=args.source)
+    candles, report = load_csvs(
+        args.paths,
+        source=args.source,
+        point_scale=getattr(args, "point_scale", None),
+    )
     print(report.summary())
     if candles.empty:
         print("nothing to write: every row was dropped", file=sys.stderr)
@@ -1029,6 +1033,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["histdata", "dukascopy", "mirror"],
     )
     ingest.add_argument("--out", required=True)
+    ingest.add_argument(
+        "--point-scale",
+        type=int,
+        default=None,
+        help="mirror source only: the divisor turning integer points into "
+             "prices. Read from the symbol in the filename when omitted.",
+    )
     ingest.set_defaults(func=cmd_ingest)
 
     fetch = sub.add_parser(
