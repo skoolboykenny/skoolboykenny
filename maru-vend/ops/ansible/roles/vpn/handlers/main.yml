@@ -1,0 +1,4 @@
+- name: reload swanctl
+  ansible.builtin.command: swanctl --load-all
+- name: reload nftables
+  ansible.builtin.service: { name: nftables, state: reloaded }

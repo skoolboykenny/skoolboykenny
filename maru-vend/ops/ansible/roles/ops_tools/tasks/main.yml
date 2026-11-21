@@ -1,0 +1,23 @@
+# Failover tooling on every DB host: active-site fence (every 5 s), HTTP primary check for HAProxy,
+# and mv-failover for the on-call engineer.
+- name: Ops scripts
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../scripts/{{ item }}"
+    dest: "/usr/local/lib/maruvend/{{ item }}"
+    mode: "0755"
+  loop: [mv-ops-lib.sh, mv-failover, mv-site-fence, mv-dbcheck]
+
+- name: Commands on PATH
+  ansible.builtin.file: { src: "/usr/local/lib/maruvend/{{ item }}", dest: "/usr/local/sbin/{{ item }}", state: link }
+  loop: [mv-failover, mv-site-fence, mv-dbcheck]
+
+- name: Ops configuration
+  ansible.builtin.template: { src: ops.env.j2, dest: /etc/maruvend/ops.env, mode: "0600" }
+
+- name: Fence service and 5-second timer, primary-check socket
+  ansible.builtin.template: { src: "{{ item }}.j2", dest: "/etc/systemd/system/{{ item }}" }
+  loop: [mv-site-fence.service, mv-site-fence.timer, mv-dbcheck.socket, "mv-dbcheck@.service"]
+
+- name: Enable fence timer and check socket
+  ansible.builtin.systemd: { name: "{{ item }}", enabled: true, state: started, daemon_reload: true }
+  loop: [mv-site-fence.timer, mv-dbcheck.socket]

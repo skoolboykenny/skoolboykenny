@@ -1,0 +1,42 @@
+# Render production templates locally with test addresses and validate them with the real tools.
+#   ansible-playbook -i tests/inventory.yml tests/render.yml
+- name: Render templates
+  hosts: mv-p-lb1,mv-p-app1,mv-p-db1,mv-p-vpn1,mv-p-db2
+  connection: local
+  gather_facts: true
+  vars:
+    out: /tmp/mv-render/{{ inventory_hostname }}
+    bpc_vpn_peer: 192.0.2.10
+    bpc_vpn_id: vpn.bpc.example
+    bpc_vending_ip: 192.0.2.20
+    site_vip: { primary: 127.10.0.10, dr: 127.20.0.10 }
+    vpn_vip: { primary: 127.10.3.10, dr: 127.20.3.10 }
+    app_subnet: { primary: 127.10.1.0/24, dr: 127.20.1.0/24 }
+    mgmt_cidrs: [127.99.0.0/24]
+    zabbix_server: 127.99.0.20
+  tasks:
+    - ansible.builtin.file: { path: "{{ out }}", state: directory }
+    - name: Load balancer
+      ansible.builtin.template: { src: "../roles/lb/templates/{{ item }}.j2", dest: "{{ out }}/{{ item }}" }
+      loop: [haproxy.cfg, keepalived.conf]
+      when: "'lb' in group_names"
+    - name: App server
+      ansible.builtin.template: { src: "../roles/app/templates/{{ item }}.j2", dest: "{{ out }}/{{ item }}" }
+      loop: [nginx-maruvend.conf, env, fpm-pool.conf, maruvend-worker@.service, maruvend-audit-verify.timer]
+      when: "'app' in group_names"
+    - name: Database
+      ansible.builtin.template: { src: "{{ item.src }}", dest: "{{ out }}/{{ item.dest }}" }
+      loop:
+        - { src: ../roles/mariadb/templates/60-maruvend.cnf.j2, dest: 60-maruvend.cnf }
+        - { src: ../roles/ops_tools/templates/ops.env.j2, dest: ops.env }
+        - { src: ../roles/quorum/templates/etcd.service.j2, dest: etcd.service }
+        - { src: ../roles/backup/templates/mv-backup.j2, dest: mv-backup }
+        - { src: ../roles/monitoring/templates/userparams.conf.j2, dest: userparams.conf }
+      when: "'db' in group_names and inventory_hostname in groups['quorum']"
+    - name: VPN and firewall
+      ansible.builtin.template: { src: "{{ item.src }}", dest: "{{ out }}/{{ item.dest }}" }
+      loop:
+        - { src: ../roles/vpn/templates/swanctl.conf.j2, dest: swanctl.conf }
+        - { src: ../roles/vpn/templates/vpn-route.nft.j2, dest: vpn-route.nft }
+        - { src: ../roles/common/templates/nftables.conf.j2, dest: nftables.conf }
+      when: "'vpn' in group_names"
