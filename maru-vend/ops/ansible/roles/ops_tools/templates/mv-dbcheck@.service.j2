@@ -1,0 +1,8 @@
+[Unit]
+Description=Maru Vend database primary check
+
+[Service]
+ExecStart=/usr/local/sbin/mv-dbcheck
+StandardInput=socket
+StandardOutput=socket
+DynamicUser=false

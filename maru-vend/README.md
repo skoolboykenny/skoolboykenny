@@ -90,9 +90,33 @@ SMS: tokens and failure notices are queued in `sms_outbox` and sent by `bin/mv s
 Payments: `MV_PAYMENTS=test` (default) approves app, web and USSD payments instantly and labels
 every page as a test. Production providers call `/pay/callback/{provider}`.
 
+## Production (`ops/`)
+
+```
+                 ┌──────── primary site (Botswana DC) ────────┐   ┌────────── DR site (Botswana DC) ──────────┐
+ channels ─TLS─► │ HAProxy pair (VIP) → app x2 (nginx, PHP,   │   │ HAProxy pair (VIP) → app x2 (standing by)  │
+                 │ workers) → MariaDB primary + replica ──────┼──►│ MariaDB replicas (GTID, semi-sync)         │
+                 │ strongSwan pair ══IPsec══► BPC             │   │ strongSwan pair (standby tunnel)           │
+                 └──────────────── etcd voter ────────────────┘   └──────────────── etcd voter ───────────────┘
+                                                     witness (3rd location): etcd voter only
+```
+
+| Path | What |
+|---|---|
+| `ops/ansible/` | Builds every server from bare Ubuntu 24.04: hardening, MariaDB (encrypted, GTID, semi-sync, audit plugin), etcd quorum, app servers (PHP-FPM, nginx, systemd workers and timers), HAProxy + keepalived, strongSwan, encrypted backups, Zabbix checks |
+| `ops/scripts/mv-failover` | Planned and emergency failover between sites, decided by the 3-voter quorum |
+| `ops/scripts/mv-site-fence` | Runs every 5 s on each DB host; makes the DB read-only if this site is not active or the quorum is unreachable |
+| `ops/scripts/mv-dbcheck` | Health check that lets HAProxy route DB connections only to the writable primary |
+| `ops/drill/local-failover-drill.sh` | Full failover drill on one machine with real MariaDB replication and a real etcd quorum |
+| `ops/runbooks/` | Build, failover, and monitoring runbooks |
+
+Workers enforce the active site in code (`src/Queue/SiteGuard.php`), so two sites can never vend at once.
+
+Validate the automation: `cd ops/ansible && ansible-playbook site.yml --syntax-check && ansible-playbook -i tests/inventory.yml tests/render.yml`.
+
 ## Not yet built
 
 - XMLVend 2.1 SOAP adapter. Needs BPC's WSDL/XSD (NRS 009-6-10 is the public spec).
 - Live payment integrations (Orange Money, MyZaka, Smega, card) and the contracted SMS provider.
 - USSD short code (BOCRA/MNO application at award).
-- Production HA/DR deployment (HAProxy, MariaDB replication with quorum witness).
+- Real servers: the automation is ready; the hardware, data centre contracts and BPC network details are needed.

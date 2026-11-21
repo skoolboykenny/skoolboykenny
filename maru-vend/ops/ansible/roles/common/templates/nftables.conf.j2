@@ -1,0 +1,21 @@
+#!/usr/sbin/nft -f
+# Managed by Ansible (role common). Default deny inbound; per-role rules in /etc/nftables.d/*.nft
+flush ruleset
+table inet filter {
+  chain input {
+    type filter hook input priority 0; policy drop;
+    ct state established,related accept
+    iif lo accept
+    ip protocol icmp accept
+    ip saddr { {{ mgmt_cidrs | join(', ') }} } tcp dport 22 accept
+    ip saddr {{ zabbix_server }} tcp dport 10050 accept
+    include "/etc/nftables.d/*.nft"
+    log prefix "nft-drop " limit rate 5/minute drop
+  }
+  chain forward {
+    type filter hook forward priority 0; policy drop;
+    ct state established,related accept
+    include "/etc/nftables.d/forward/*.nft"
+  }
+  chain output  { type filter hook output priority 0; policy accept; }
+}

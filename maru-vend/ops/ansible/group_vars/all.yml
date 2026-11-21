@@ -1,0 +1,50 @@
+# Non-secret settings. Secrets live in group_vars/vault.yml (ansible-vault encrypted, never committed
+# unencrypted): vault_db_app_pass, vault_db_ops_pass, vault_repl_pass, vault_backup_gpg_recipient,
+# vault_core_hmac secrets, vault_sms_token, vault_agg_* credentials.
+mv_repo: "git@github.com:<org>/maru-vend.git"
+mv_version: "main"
+mv_root: /opt/maruvend
+mv_app_dir: "{{ mv_root }}/current"
+mv_domain_api: "api.maruvend.co.bw"
+mv_domain_store: "electricity.maruquick.co.bw"
+mv_domain_bpc: "bpc.maruvend.co.bw"
+timezone: Africa/Gaborone
+
+# Floating addresses (keepalived) per site.
+site_vip:
+  primary: "<10.10.0.10>"
+  dr: "<10.20.0.10>"
+vpn_vip:
+  primary: "<10.10.3.10>"
+  dr: "<10.20.3.10>"
+
+mariadb_version: "10.11"
+db_port: 3306
+db_name: maruvend
+db_app_user: maruvend
+db_ops_user: mvops
+db_repl_user: repl
+db_app_pass: "{{ vault_db_app_pass | default('CHANGE-ME') }}"
+db_ops_pass: "{{ vault_db_ops_pass | default('CHANGE-ME') }}"
+db_repl_pass: "{{ vault_repl_pass | default('CHANGE-ME') }}"
+
+# Preferred primary first at each site.
+site_db:
+  primary: "{{ groups['db'] | select('match', 'mv-p-') | map('extract', hostvars, 'ansible_host') | map('regex_replace', '$', ':3306') | join(' ') }}"
+  dr: "{{ groups['db'] | select('match', 'mv-d-') | map('extract', hostvars, 'ansible_host') | map('regex_replace', '$', ':3306') | join(' ') }}"
+
+etcd_version: "3.5.17"
+etcd_endpoints: "{{ groups['quorum'] | map('extract', hostvars, 'ansible_host') | map('regex_replace', '^(.*)$', 'https://\\1:2379') | join(',') }}"
+
+workers_per_app_host: 2
+backup_retention_days: 35
+backup_gpg_recipient: "{{ vault_backup_gpg_recipient | default('') }}"
+
+# Management network allowed to SSH; everything else is closed.
+mgmt_cidrs: ["<10.99.0.0/24>"]
+zabbix_server: "<10.99.0.20>"
+
+# Application (XMLVend client) subnet per site: the only source allowed to reach BPC.
+app_subnet:
+  primary: "<10.10.1.0/24>"
+  dr: "<10.20.1.0/24>"

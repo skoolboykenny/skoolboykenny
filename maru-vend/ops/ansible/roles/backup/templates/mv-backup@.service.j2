@@ -1,0 +1,6 @@
+[Unit]
+Description=Maru Vend encrypted database backup (%i)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/mv-backup %i

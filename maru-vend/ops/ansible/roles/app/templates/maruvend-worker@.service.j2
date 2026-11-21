@@ -1,0 +1,19 @@
+[Unit]
+Description=Maru Vend queue worker %i (stands by unless this site is active)
+After=network-online.target
+
+[Service]
+User=maruvend
+EnvironmentFile=/etc/maruvend/env
+WorkingDirectory={{ mv_app_dir }}
+ExecStart=/usr/bin/php bin/mv worker --id={{ inventory_hostname }}:%i
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/maruvend /var/log/maruvend
+
+[Install]
+WantedBy=multi-user.target

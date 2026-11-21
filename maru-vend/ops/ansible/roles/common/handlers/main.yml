@@ -1,0 +1,6 @@
+- name: restart ssh
+  ansible.builtin.service: { name: ssh, state: restarted }
+- name: reload auditd
+  ansible.builtin.command: augenrules --load
+- name: reload nftables
+  ansible.builtin.service: { name: nftables, state: reloaded }

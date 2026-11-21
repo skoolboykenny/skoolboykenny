@@ -1,0 +1,25 @@
+# Managed by Ansible (role lb)
+vrrp_script chk_haproxy {
+    script "/usr/bin/killall -0 haproxy"
+    interval 2
+    fall 2
+    rise 2
+}
+vrrp_instance MV_{{ mv_site | upper }} {
+    state BACKUP
+    interface {{ ansible_default_ipv4.interface | default('eth0') }}
+    virtual_router_id {{ 51 if mv_site == 'primary' else 52 }}
+    priority {{ lb_priority }}
+    advert_int 1
+    nopreempt
+    authentication {
+        auth_type PASS
+        auth_pass {{ vault_vrrp_pass | default('changeme') }}
+    }
+    virtual_ipaddress {
+        {{ site_vip[mv_site] }}
+    }
+    track_script {
+        chk_haproxy
+    }
+}

@@ -132,4 +132,20 @@ final class AuditAndControlsTest extends TestCase
         $this->assertSame('25.00', $rec['Sales (tokens issued)']);
         $this->assertSame('10000.00', $rec['Cash deposited with BPC']);
     }
+
+    public function testWorkersStandByWhenThisSiteIsNotActive(): void
+    {
+        $guard = new \MaruVend\Queue\SiteGuard($this->pdo, $this->app->settings);
+        putenv('MV_SITE=primary');
+        $this->assertNull($guard->blockedReason());
+        $this->app->settings->apply('active_site', 'dr', 'failover', $this->app->audit);
+        $this->assertStringContainsString("active site is 'dr'", (string) $guard->blockedReason());
+
+        $s = $this->posSale();
+        $worker = new \MaruVend\Queue\Worker($this->pdo, $this->app->settings, $this->vend, 'test');
+        $this->assertFalse($worker->runOnce(), 'worker must not take jobs at an inactive site');
+        $this->assertSame('RESERVED', $this->vend->sale((int) $s['id'])['state']);
+        $this->assertSame(0, $this->provider->vendCalls());
+        putenv('MV_SITE');
+    }
 }

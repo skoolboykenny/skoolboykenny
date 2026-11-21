@@ -1,0 +1,28 @@
+# Managed by Ansible (role monitoring). Suggested triggers in ops/runbooks/monitoring.md
+{% if 'app' in group_names %}
+# Jobs waiting in the vend queue (alert > 50 for 2 min)
+UserParameter=mv.queue.depth,set -a; . /etc/maruvend/env; mariadb -h"$MV_DB_HOST" -P"$MV_DB_PORT" -u"$MV_DB_USER" -p"$MV_DB_PASS" -N -e "SELECT COUNT(*) FROM queue_jobs WHERE done=0 AND next_run_at <= NOW()" "$MV_DB_NAME"
+# Money held in sales awaiting BPC confirmation, thebe (alert > 50% of max_unknown_thebe)
+UserParameter=mv.unresolved.thebe,set -a; . /etc/maruvend/env; mariadb -h"$MV_DB_HOST" -P"$MV_DB_PORT" -u"$MV_DB_USER" -p"$MV_DB_PASS" -N -e "SELECT COALESCE(SUM(amount_thebe),0) FROM vend_sales WHERE state IN ('UNKNOWN','MANUAL_REVIEW')" "$MV_DB_NAME"
+# Sales held for manual reconciliation older than 2 hours (alert > 0)
+UserParameter=mv.manual_review.old,set -a; . /etc/maruvend/env; mariadb -h"$MV_DB_HOST" -P"$MV_DB_PORT" -u"$MV_DB_USER" -p"$MV_DB_PASS" -N -e "SELECT COUNT(*) FROM vend_sales WHERE state='MANUAL_REVIEW' AND submitted_at < NOW() - INTERVAL 2 HOUR" "$MV_DB_NAME"
+# Float available, thebe (alert below float_alert_pct of last deposit; vending stops at zero)
+UserParameter=mv.float.available,set -a; . /etc/maruvend/env; mariadb -h"$MV_DB_HOST" -P"$MV_DB_PORT" -u"$MV_DB_USER" -p"$MV_DB_PASS" -N -e "SELECT available FROM float_position WHERE id=1" "$MV_DB_NAME"
+# Failed sales in the last 15 minutes (alert on a sudden rise: BPC-side problem)
+UserParameter=mv.failed.15m,set -a; . /etc/maruvend/env; mariadb -h"$MV_DB_HOST" -P"$MV_DB_PORT" -u"$MV_DB_USER" -p"$MV_DB_PASS" -N -e "SELECT COUNT(*) FROM vend_sales WHERE state='FAILED' AND resolved_at > NOW() - INTERVAL 15 MINUTE" "$MV_DB_NAME"
+# SMS not delivered (alert > 0)
+UserParameter=mv.sms.failed,set -a; . /etc/maruvend/env; mariadb -h"$MV_DB_HOST" -P"$MV_DB_PORT" -u"$MV_DB_USER" -p"$MV_DB_PASS" -N -e "SELECT COUNT(*) FROM sms_outbox WHERE status='failed' OR (status='queued' AND created_at < NOW() - INTERVAL 5 MINUTE)" "$MV_DB_NAME"
+# Last audit verification result (systemd unit exit status; alert != 0)
+UserParameter=mv.audit.verify,systemctl show -p ExecMainStatus --value maruvend-audit-verify.service
+{% endif %}
+{% if 'db' in group_names %}
+# 1 = this database is writable (exactly one in the whole estate must be 1)
+UserParameter=mv.db.writable,mariadb -N -e "SELECT 1 - @@global.read_only"
+# Replication lag in seconds (alert > 30); empty on the primary
+UserParameter=mv.db.lag,mariadb -e "SHOW SLAVE STATUS\G" | awk '/Seconds_Behind_Master/{print $2}'
+UserParameter=mv.db.sql_running,mariadb -e "SHOW SLAVE STATUS\G" | awk '/Slave_SQL_Running:/{print $2}'
+{% endif %}
+{% if 'vpn' in group_names %}
+# Established IPsec SAs to BPC (alert = 0 on the active site)
+UserParameter=mv.vpn.sas,swanctl --list-sas 2>/dev/null | grep -c ESTABLISHED
+{% endif %}

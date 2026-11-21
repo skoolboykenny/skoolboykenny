@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Move vending to another site (clause 7.10, tender 2.3(h)).
+#
+#   mv-failover <target-site> --planned     both sites up: drain, fence old primary, promote (no data loss)
+#   mv-failover <target-site> --emergency   active site lost: quorum decides, wait for the old site to
+#                                           fence itself, promote the target site's replica
+#   mv-failover --status
+#
+# Safety rules:
+#   * The decision is written to the 3-voter quorum (two sites + witness) with compare-and-swap
+#     BEFORE any database is promoted. A site cut off from the quorum cannot promote itself.
+#   * Every DB host runs mv-site-fence, which sets read_only when it cannot see the quorum
+#     or the quorum names another site. Workers refuse to vend against a read-only DB
+#     (src/Queue/SiteGuard.php), so two sites can never vend at the same time.
+#   * In an emergency we wait FENCE_GRACE_S before promoting, so an isolated old primary has
+#     fenced itself first.
+. "$(dirname "$0")/mv-ops-lib.sh"
+
+status() {
+  local active; active=$(quorum_active_site 2>/dev/null || echo "NO QUORUM")
+  echo "Quorum says active site: $active"
+  for s in $MV_SITES; do
+    for hp in $(site_hosts "$s"); do
+      if db_up "$hp"; then
+        local role gtid lag
+        role=$(db_writable "$hp" && echo "WRITABLE (primary)" || echo "read-only")
+        gtid=$(sql "$hp" "SELECT @@gtid_current_pos")
+        lag=$(sqlv "$hp" "SHOW SLAVE STATUS\\G" 2>/dev/null | awk '/^ *Master_Host:/{h=$2} /^ *Master_Port:/{p=$2} /^ *Slave_SQL_Running:/{r=$2} /^ *Seconds_Behind_Master:/{b=$2} END{if(h!="") print "replicating from " h ":" p ", sql_running=" r ", " b "s behind"}')
+        printf '  %-8s %-22s %-20s gtid=%s %s\n' "$s" "$hp" "$role" "$gtid" "${lag:-}"
+      else
+        printf '  %-8s %-22s DOWN\n' "$s" "$hp"
+      fi
+    done
+  done
+}
+
+[ "${1:-}" = "--status" ] && { status; exit 0; }
+target=${1:?usage: mv-failover <target-site> --planned|--emergency}
+mode=${2:?usage: mv-failover <target-site> --planned|--emergency}
+[[ " $MV_SITES " == *" $target "* ]] || die "unknown site $target"
+t0=$(date +%s)
+
+current=$(quorum_active_site) || die "no quorum: cannot decide (need 2 of 3 voters). Restore the witness or a site link first."
+[ "$current" = "$target" ] && die "$target is already the active site"
+new_primary=$(site_hosts "$target" | awk '{print $1}')
+db_up "$new_primary" || die "target database $new_primary is down"
+log "Active site: ${current:-none}. Moving to: $target (new primary $new_primary), mode $mode"
+
+old_primary=""
+for hp in $(site_hosts "$current"); do db_up "$hp" && db_writable "$hp" && old_primary=$hp && break; done
+
+if [ "$mode" = "--planned" ]; then
+  [ -n "$old_primary" ] || die "planned failover needs the current primary up; use --emergency"
+  log "Fencing old primary $old_primary (read_only); workers there stand by"
+  fence_db "$old_primary"
+  gtid=$(sql "$old_primary" "SELECT @@gtid_binlog_pos")
+  log "Waiting for $new_primary to apply up to GTID $gtid"
+  [ "$(sql "$new_primary" "SELECT MASTER_GTID_WAIT('$gtid', 60)")" = "0" ] || die "replica did not catch up in 60 s; old primary stays fenced, investigate"
+elif [ "$mode" = "--emergency" ]; then
+  if [ -n "$old_primary" ]; then
+    log "Old primary $old_primary is reachable: fencing it now"
+    fence_db "$old_primary" || true
+  fi
+  log "Waiting ${FENCE_GRACE_S}s so an unreachable old site fences itself (mv-site-fence)"
+  sleep "$FENCE_GRACE_S"
+  log "Applying everything $new_primary already received from the old primary"
+  wait_relay_applied "$new_primary" 60 || log "WARNING: relay log not fully applied after 60 s; continuing"
+else
+  die "mode must be --planned or --emergency"
+fi
+
+log "Recording decision in quorum (compare-and-swap ${current:-<none>} -> $target)"
+[ "$(quorum_cas "$current" "$target")" = "SUCCESS" ] || die "quorum changed underneath us (another failover?). Nothing promoted."
+
+log "Promoting $new_primary"
+sql "$new_primary" "STOP ALL SLAVES; RESET SLAVE ALL; SET GLOBAL read_only = 0"
+
+log "Recording active_site=$target in the database (audit-logged)"
+( cd "${MV_APP_DIR:?}" && MV_DB_HOST="${new_primary%:*}" MV_DB_PORT="${new_primary#*:}" php bin/mv setting:set active_site "$target" --actor=failover >/dev/null )
+
+for s in $MV_SITES; do
+  for hp in $(site_hosts "$s"); do
+    [ "$hp" = "$new_primary" ] && continue
+    if ! db_up "$hp"; then log "  $hp down: rebuild it from a backup of $new_primary when it returns"; continue; fi
+    fence_db "$hp"
+    if [ "$hp" = "$old_primary" ] && [ "$mode" = "--emergency" ]; then
+      log "  $hp was the primary during an emergency: it may hold transactions $new_primary never received."
+      log "  It stays fenced. Reconcile with 'mv-failover --status', then rebuild it as a replica."
+      continue
+    fi
+    sql "$hp" "STOP ALL SLAVES; CHANGE MASTER TO MASTER_HOST='${new_primary%:*}', MASTER_PORT=${new_primary#*:}, MASTER_USER='${REPL_USER:?}', MASTER_PASSWORD='${REPL_PASS:?}', MASTER_USE_GTID=slave_pos, MASTER_SSL=${REPL_SSL:-1}; START SLAVE"
+    log "  $hp now replicates from $new_primary"
+  done
+done
+
+log "Done in $(( $(date +%s) - t0 ))s. Vending is active at $target."
+status

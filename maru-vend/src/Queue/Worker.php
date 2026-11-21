@@ -22,9 +22,25 @@ final class Worker
         private string $workerId,
     ) {}
 
-    /** Claim and process one job. Returns false when nothing is ready. */
+    private ?SiteGuard $guard = null;
+    private ?string $lastBlock = null;
+
+    /** Claim and process one job. Returns false when nothing is ready (or this site may not vend). */
     public function runOnce(): bool
     {
+        $this->guard ??= new SiteGuard($this->pdo, $this->settings);
+        $blocked = $this->guard->blockedReason();
+        if ($blocked !== null) {
+            if ($blocked !== $this->lastBlock) {
+                error_log("[worker {$this->workerId}] standing by: $blocked");
+            }
+            $this->lastBlock = $blocked;
+            return false;
+        }
+        if ($this->lastBlock !== null) {
+            error_log("[worker {$this->workerId}] site is active: resuming");
+            $this->lastBlock = null;
+        }
         $job = $this->claim();
         if (!$job) {
             return false;
