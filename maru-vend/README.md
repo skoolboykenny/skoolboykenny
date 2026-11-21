@@ -71,9 +71,28 @@ vendor/bin/phpunit               # 24 tests
 7. **2.3(d) Security:** swanctl policy, firewall rules, MFA login.
 8. **2.3(h) DR:** failover drill on the production pair (see `ops/`). This is infrastructure, not code.
 
+## Channels (`channels/`, port 8081)
+
+The channel server holds each channel's API secret and calls the core API on behalf of browsers
+and phones, so no secret ever reaches a customer device.
+
+| Channel | URL | Notes |
+|---|---|---|
+| Web store (24h) | `/` | Meter, amount and phone; confirm name; pay; token with receipt; free reprint |
+| Maru app (24h) | `/app` | Same flow, installable on a phone (web app manifest and offline shell) |
+| Merchant POS | `/pos` | Operator PIN sign-in; cash sale against the merchant float; 58 mm receipt; reprint; shift total |
+| USSD (24h) | `POST /ussd` | Standard aggregator callback (`sessionId`, `phoneNumber`, `text`). The session ends after payment and the token goes by SMS, so USSD timeouts never cut a sale |
+| USSD emulator | `/ussd-phone` | Test only (`MV_DEMO=1`): basic-phone screen and SMS inbox |
+
+SMS: tokens and failure notices are queued in `sms_outbox` and sent by `bin/mv sms`
+(`MV_SMS_PROVIDER=log` in test, `http` for the contracted provider with a fallback URL).
+
+Payments: `MV_PAYMENTS=test` (default) approves app, web and USSD payments instantly and labels
+every page as a test. Production providers call `/pay/callback/{provider}`.
+
 ## Not yet built
 
 - XMLVend 2.1 SOAP adapter. Needs BPC's WSDL/XSD (NRS 009-6-10 is the public spec).
-- Channel front-ends (POS screen, app, web store, USSD menus). They call this API.
-- SMS token delivery and mobile-money/card payment integrations.
+- Live payment integrations (Orange Money, MyZaka, Smega, card) and the contracted SMS provider.
+- USSD short code (BOCRA/MNO application at award).
 - Production HA/DR deployment (HAProxy, MariaDB replication with quorum witness).

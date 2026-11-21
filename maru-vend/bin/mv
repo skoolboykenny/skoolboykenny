@@ -107,6 +107,20 @@ switch ($cmd) {
         echo "Worker $id processed $n jobs.\n";
         break;
 
+    case 'sms':
+        // Send queued customer SMS. Runs continuously unless --once.
+        $app = App::boot();
+        $sender = new \MaruVend\Sms\SmsSender($app->pdo);
+        do {
+            $n = $sender->run();
+            if ($opt('once') !== null) {
+                echo "Sent $n SMS.\n";
+                break;
+            }
+            usleep($n ? 100_000 : 1_000_000);
+        } while (true);
+        break;
+
     case 'sweep':
         $app = App::boot();
         echo 'Expired ' . $app->vend()->expireStale() . " stale quotes.\n";
@@ -244,6 +258,7 @@ switch ($cmd) {
           float
           worker [--id=w1] [--max=N] [--idle-exit=S]
           sweep                                 expire stale quotes
+          sms [--once=1]                        send queued customer SMS
           audit:anchor | audit:verify
           report sales|pit|invoice|recon [--from=Y-m-d --to=Y-m-d --at='Y-m-d H:i:s' --format=csv]
           export [--from --to --out=file.gpg]   encrypted to BPC's key

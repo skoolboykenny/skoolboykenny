@@ -5,6 +5,7 @@ namespace MaruVend\Api;
 
 use MaruVend\App;
 use MaruVend\Vend\VendException;
+use MaruVend\Vend\VendService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Server\RequestHandlerInterface as Handler;
@@ -20,6 +21,8 @@ use Slim\Factory\AppFactory;
  *   POST /v1/sales/{id}/payment {payment_ref}                     -> payment confirmed; sale queued
  *   GET  /v1/vend/{id}                                            -> status; receipt and token when complete
  *   POST /v1/reprint            {receipt_no} | {meter}            -> free reprint
+ *   POST /v1/confirm also takes optional msisdn: the token is then sent by SMS as well.
+ *   GET  /v1/demo/sms?msisdn=   test environment only (MV_DEMO=1): SMS sent to a phone, for the USSD emulator
  */
 final class ApiApp
 {
@@ -60,7 +63,7 @@ final class ApiApp
                 if ($key === '' || strlen($key) > 64) {
                     throw new VendException('BAD_REQUEST', 'idempotency_key is required (max 64 characters).');
                 }
-                return self::view($app->vend()->quote($ch, (string) ($b['meter'] ?? ''), $amount, $key), $app);
+                return self::view($app->vend()->quote($ch, (string) ($b['meter'] ?? ''), $amount, $key, isset($b['msisdn']) ? (string) $b['msisdn'] : null), $app);
             }));
             $g->post('/vend', $wrap(fn (App $app, array $ch, array $b) => self::view($app->vend()->accept($ch, (int) ($b['sale_id'] ?? 0)), $app)));
             $g->post('/sales/{id}/payment', $wrap(fn (App $app, array $ch, array $b, array $a) =>
@@ -72,6 +75,15 @@ final class ApiApp
                     throw new VendException('NOT_FOUND', 'No token found for that receipt or meter.', 404);
                 }
                 return self::view($s, $app);
+            }));
+            $g->get('/demo/sms', $wrap(function (App $app, array $ch, array $b) {
+                if (\MaruVend\Config::env('MV_DEMO') !== '1') {
+                    throw new VendException('NOT_FOUND', 'Not available', 404);
+                }
+                $m = VendService::normaliseMsisdn((string) ($_GET['msisdn'] ?? ''));
+                $st = $app->pdo->prepare("SELECT body, status, created_at FROM sms_outbox WHERE msisdn = ? ORDER BY id DESC LIMIT 10");
+                $st->execute([$m]);
+                return ['messages' => $st->fetchAll()];
             }));
         })->add($auth);
 

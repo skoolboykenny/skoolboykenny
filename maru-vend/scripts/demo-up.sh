@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # Start a complete Maru Vend demo stack on one machine (test environment only):
-# BPC simulator :8099, Maru Vend API + BPC dashboard :8080, 4 queue workers.
+# BPC simulator :8099, Maru Vend API + BPC dashboard :8080, channels (store, app, POS, USSD) :8081,
+# 4 queue workers and the SMS sender.
 # Usage: MV_DB_PASS=... scripts/demo-up.sh [--reset]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export MV_DB_PASS="${MV_DB_PASS:?set MV_DB_PASS}"
+export MV_DEMO=1
 [ -f /tmp/mv-gpg.env ] && export $(cat /tmp/mv-gpg.env)
 
 pkill -f "bin/mv worker" 2>/dev/null || true
+pkill -f "bin/mv sms" 2>/dev/null || true
 pkill -f "php -S 127.0.0.1:80" 2>/dev/null || true
 sleep 1
 
@@ -27,6 +30,14 @@ fi
 
 PHP_CLI_SERVER_WORKERS=16 nohup php -S 127.0.0.1:8099 simulator/index.php >/tmp/sim.log 2>&1 &
 PHP_CLI_SERVER_WORKERS=16 nohup php -S 127.0.0.1:8080 -t public public/index.php >/tmp/api.log 2>&1 &
+PHP_CLI_SERVER_WORKERS=8 nohup php -S 127.0.0.1:8081 -t channels/public channels/public/index.php >/tmp/channels.log 2>&1 &
 for w in 1 2 3 4; do nohup php bin/mv worker --id=w$w >/tmp/worker$w.log 2>&1 & done
+nohup php bin/mv sms >/tmp/sms.log 2>&1 &
 sleep 1
-echo "Simulator http://127.0.0.1:8099  API http://127.0.0.1:8080/v1  Dashboard http://127.0.0.1:8080/bpc"
+cat <<TXT
+BPC simulator   http://127.0.0.1:8099
+Core API        http://127.0.0.1:8080/v1     BPC dashboard http://127.0.0.1:8080/bpc
+Web store       http://127.0.0.1:8081/       Maru app      http://127.0.0.1:8081/app
+Merchant POS    http://127.0.0.1:8081/pos    (operator till1, PIN 1234)
+USSD emulator   http://127.0.0.1:8081/ussd-phone
+TXT
