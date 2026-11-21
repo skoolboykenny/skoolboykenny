@@ -39,12 +39,13 @@ final class VendService
      * Step 1: validate the meter with BPC and create the sale as QUOTED.
      * Idempotent per (merchant, idempotency key): a repeated request returns the same sale.
      */
-    public function quote(array $channel, string $meter, int $amountThebe, string $idempotencyKey): array
+    public function quote(array $channel, string $meter, int $amountThebe, string $idempotencyKey, ?string $msisdn = null): array
     {
         if ($existing = $this->findByIdempotency((int) $channel['merchant_id'], $idempotencyKey)) {
             return $existing;
         }
         $this->validateRequest($channel, $meter, $amountThebe);
+        $msisdn = self::normaliseMsisdn($msisdn);
 
         $clientSaleId = Ulid::generate();
         $this->limiter?->acquire();
@@ -56,17 +57,17 @@ final class VendService
             };
         }
 
-        return Db::tx($this->pdo, function () use ($channel, $meter, $amountThebe, $idempotencyKey, $clientSaleId, $r) {
+        return Db::tx($this->pdo, function () use ($channel, $meter, $amountThebe, $idempotencyKey, $clientSaleId, $r, $msisdn) {
             $this->pdo->exec('INSERT INTO receipt_seq () VALUES ()');
             $seq = (string) $this->pdo->lastInsertId(); // read before any other statement resets it
             $receiptNo = $this->settings->get('receipt_prefix') . str_pad($seq, 10, '0', STR_PAD_LEFT);
             $ttl = $this->settings->int('quote_ttl_s');
             $this->pdo->prepare(
                 'INSERT INTO vend_sales (merchant_id, channel_id, idempotency_key, receipt_no, client_sale_id, meter_number,
-                     customer_name, amount_thebe, state, provider, quote_expires_at)
-                 VALUES (?,?,?,?,?,?,?,?,?,?, NOW(6) + INTERVAL ? SECOND)'
+                     customer_name, msisdn, amount_thebe, state, provider, quote_expires_at)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?, NOW(6) + INTERVAL ? SECOND)'
             )->execute([$channel['merchant_id'], $channel['id'], $idempotencyKey, $receiptNo, $clientSaleId, $meter,
-                $r->data['customerName'] ?? null, $amountThebe, SaleState::QUOTED, $this->provider->name(), $ttl]);
+                $r->data['customerName'] ?? null, $msisdn, $amountThebe, SaleState::QUOTED, $this->provider->name(), $ttl]);
             $saleId = (int) $this->pdo->lastInsertId();
             $this->event($saleId, null, SaleState::QUOTED, 'Meter confirmed by BPC', "channel:{$channel['id']}");
             return $this->sale($saleId);
@@ -271,6 +272,30 @@ final class VendService
 
     // ------------------------------------------------------------------ internals
 
+    /** Botswana mobile numbers: 8 digits starting with 7, optionally prefixed +267/267. */
+    public static function normaliseMsisdn(?string $msisdn): ?string
+    {
+        if ($msisdn === null || trim($msisdn) === '') {
+            return null;
+        }
+        $d = preg_replace('/\D/', '', $msisdn);
+        if (strlen($d) === 11 && str_starts_with($d, '267')) {
+            $d = substr($d, 3);
+        }
+        if (!preg_match('/^7\d{7}$/', $d)) {
+            throw new VendException('BAD_PHONE', 'Phone number must be a Botswana mobile number, e.g. 71234567.');
+        }
+        return $d;
+    }
+
+    private function sms(array $sale, string $body): void
+    {
+        if (!empty($sale['msisdn'])) {
+            $this->pdo->prepare('INSERT INTO sms_outbox (sale_id, msisdn, body) VALUES (?,?,?)')->execute([$sale['id'], $sale['msisdn'], $body]);
+        }
+    }
+
+
     private function validateRequest(array $channel, string $meter, int $amount): void
     {
         if (!preg_match('/^\d{11,13}$/', $meter)) {
@@ -331,6 +356,11 @@ final class VendService
         $this->float->fee((int) $sale['id'], $fee);
         $this->transition($sale, SaleState::SUCCEEDED, $cause, 'worker');
         $this->finishJobs((int) $sale['id']);
+        $kct = array_filter([$d['keyChange1'] ?? null, $d['keyChange2'] ?? null]);
+        $this->sms($sale, sprintf('BPC electricity token for meter %s: %s. %s kWh, P%.2f. Receipt %s.%s Maru Quick',
+            $sale['meter_number'], trim(chunk_split((string) $d['token'], 4, ' ')), number_format((float) ($d['kwh'] ?? 0), 1),
+            $sale['amount_thebe'] / 100, $sale['receipt_no'],
+            $kct ? ' Enter key change tokens first: ' . implode(' then ', array_map(fn ($t) => trim(chunk_split($t, 4, ' ')), $kct)) . '.' : ''));
     }
 
     private function fail(array $sale, string $cause, ?string $faultCode = null): void
@@ -339,6 +369,8 @@ final class VendService
         $this->pdo->prepare('UPDATE vend_sales SET resolved_at = NOW(6) WHERE id = ?')->execute([$sale['id']]);
         $this->transition($sale, SaleState::FAILED, $cause . '; float released', 'worker', $faultCode);
         $this->finishJobs((int) $sale['id']);
+        $this->sms($sale, sprintf('BPC could not issue a token for meter %s (receipt %s). You have not been charged; any payment will be returned. Maru Quick',
+            $sale['meter_number'], $sale['receipt_no']));
     }
 
     private function scheduleAdvice(int $saleId, int $delayS): void

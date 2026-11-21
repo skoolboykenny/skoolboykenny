@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS vend_sales (
   client_sale_id         CHAR(26) NOT NULL,     -- ULID sent to the provider; reused on every retry/advice
   meter_number           VARCHAR(20) NOT NULL,
   customer_name          VARCHAR(120) NULL,
+  msisdn                 VARCHAR(15) NULL,      -- customer phone for SMS token delivery
   amount_thebe           BIGINT NOT NULL CHECK (amount_thebe > 0),
   state                  VARCHAR(20) NOT NULL,  -- cache only; sale_events is the record of truth
   provider               VARCHAR(20) NOT NULL,
@@ -231,4 +232,22 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS audit_head (
   id        TINYINT PRIMARY KEY CHECK (id = 1),
   last_hash CHAR(64) NOT NULL
+) ENGINE=InnoDB;
+
+-- Upgrade path for databases created before msisdn existed.
+ALTER TABLE vend_sales ADD COLUMN IF NOT EXISTS msisdn VARCHAR(15) NULL AFTER customer_name;
+
+-- SMS to customers (token delivery, failure notices). Sent by `bin/mv sms` through the SMS provider.
+CREATE TABLE IF NOT EXISTS sms_outbox (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  sale_id     BIGINT NULL,
+  msisdn      VARCHAR(15) NOT NULL,
+  body        VARCHAR(480) NOT NULL,
+  status      ENUM('queued','sent','failed') NOT NULL DEFAULT 'queued',
+  attempts    INT NOT NULL DEFAULT 0,
+  provider_ref VARCHAR(64) NULL,
+  created_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  sent_at     DATETIME(6) NULL,
+  KEY ix_status (status),
+  KEY ix_msisdn (msisdn)
 ) ENGINE=InnoDB;

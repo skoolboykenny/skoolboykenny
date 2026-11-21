@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maru Quick · Buy Electricity</title>
+<meta name="description" content="Buy BPC prepaid electricity tokens 24 hours a day.">
+<meta name="theme-color" content="#fcd94a">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/assets/icon-192.png">
+<link rel="apple-touch-icon" href="/assets/icon-192.png">
+<link rel="stylesheet" href="/assets/maru.css">
+</head>
+<body>
+<div class="banner" id="testBanner" hidden>TEST ENVIRONMENT: payments are simulated and no money is taken.</div>
+<header class="top">
+  <img src="/assets/logo.png" alt="Maru Quick">
+  <div><div class="t">BPC Electricity</div><div class="s" id="channelName">Web store · open 24 hours</div></div>
+</header>
+
+<main>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tabBuy" aria-selected="true">Buy electricity</button>
+    <button role="tab" id="tabReprint" aria-selected="false">Get my token again</button>
+  </div>
+
+  <!-- Step 1: meter and amount -->
+  <section id="stepEntry">
+    <h1>Buy prepaid electricity</h1>
+    <p class="lead">Your token is shown here and sent to you by SMS.</p>
+    <form id="entryForm" class="card" novalidate>
+      <label for="meter">Meter number</label>
+      <input id="meter" inputmode="numeric" autocomplete="off" placeholder="e.g. 04040404040" maxlength="13" required>
+      <div class="chips" id="savedMeters"></div>
+      <label for="amount">Amount (Pula) <small>minimum P10</small></label>
+      <input id="amount" type="number" inputmode="decimal" min="10" step="1" placeholder="e.g. 100" required>
+      <div class="chips" id="quickAmounts"></div>
+      <label for="msisdn">Mobile number for SMS <small>(recommended)</small></label>
+      <input id="msisdn" type="tel" inputmode="tel" autocomplete="tel" placeholder="71 234 567" maxlength="13">
+      <div class="note err" id="entryError" role="alert" hidden></div>
+      <button class="btn" id="checkBtn" type="submit">Check meter</button>
+    </form>
+  </section>
+
+  <!-- Step 2: confirm and pay -->
+  <section id="stepConfirm" hidden>
+    <h1>Confirm and pay</h1>
+    <p class="lead">Check the name and meter number before you pay.</p>
+    <div class="card">
+      <dl class="kv">
+        <dt>Name</dt><dd id="cName"></dd>
+        <dt>Meter</dt><dd id="cMeter"></dd>
+        <dt>Amount</dt><dd id="cAmount"></dd>
+      </dl>
+    </div>
+    <form id="payForm" class="card">
+      <fieldset style="border:0;padding:0;margin:0">
+        <legend><b>Pay with</b></legend>
+        <div class="methods" id="methods"></div>
+      </fieldset>
+      <div class="note err" id="payError" role="alert" hidden></div>
+      <button class="btn" id="payBtn" type="submit">Pay</button>
+      <button class="btn secondary" id="backBtn" type="button">Change details</button>
+    </form>
+  </section>
+
+  <!-- Step 3: waiting for BPC -->
+  <section id="stepWait" hidden>
+    <div class="card center">
+      <div class="spinner" aria-hidden="true"></div>
+      <h1 id="waitTitle">Buying your token</h1>
+      <p class="muted" id="waitMsg" aria-live="polite">This usually takes a few seconds.</p>
+    </div>
+  </section>
+
+  <!-- Step 4: result -->
+  <section id="stepDone" hidden>
+    <div id="doneOk" hidden>
+      <div class="note ok"><b>Token issued.</b> <span id="smsNote"></span></div>
+      <div class="card">
+        <div id="kctBox" hidden>
+          <p><b>Enter these key change tokens first, in order:</b></p>
+          <div class="token kct" id="kct1"></div>
+          <div class="token kct" id="kct2" hidden></div>
+          <p><b>Then enter your electricity token:</b></p>
+        </div>
+        <div class="token" id="token"></div>
+        <button class="btn secondary" id="copyBtn" type="button">Copy token</button>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0">Receipt</h2>
+        <dl class="kv" id="receipt"></dl>
+      </div>
+    </div>
+    <div id="doneFail" class="note err" hidden></div>
+    <div id="donePending" class="note warn" hidden></div>
+    <button class="btn" id="againBtn" type="button">Buy again</button>
+  </section>
+
+  <!-- Reprint -->
+  <section id="stepReprint" hidden>
+    <h1>Get my token again</h1>
+    <p class="lead">Free. Enter your meter number or receipt number.</p>
+    <form id="reprintForm" class="card">
+      <label for="rpValue">Meter or receipt number</label>
+      <input id="rpValue" autocomplete="off" required>
+      <div class="note err" id="rpError" role="alert" hidden></div>
+      <button class="btn" type="submit">Find my token</button>
+    </form>
+  </section>
+</main>
+<footer>Maru Quick (Pty) Ltd · Authorised BPC vendor · Help 24 hours: [support number]</footer>
+<script src="/assets/store.js"></script>
+</body>
+</html>
