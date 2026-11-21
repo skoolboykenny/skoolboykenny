@@ -1,0 +1,254 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use MaruVend\Api\HmacAuth;
+use MaruVend\App;
+use MaruVend\Db;
+use MaruVend\Export\EncryptedExport;
+use MaruVend\Reports\Reports;
+
+$cmd = $argv[1] ?? 'help';
+$args = array_slice($argv, 2);
+$opt = function (string $name, ?string $default = null) use ($args): ?string {
+    foreach ($args as $a) {
+        if (str_starts_with($a, "--$name=")) {
+            return substr($a, strlen($name) + 3);
+        }
+    }
+    return $default;
+};
+$print = fn ($data) => print(json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+
+switch ($cmd) {
+    case 'migrate':
+        App::migrate(Db::connect());
+        echo "Schema up to date.\n";
+        break;
+
+    case 'seed':
+        // Demo data: one merchant per channel type, a designated area, and an opening BPC deposit.
+        $app = App::boot();
+        $pdo = $app->pdo;
+        $pdo->exec("INSERT IGNORE INTO designated_areas (id, district, village, target_date, status) VALUES
+            (1,'South East','Gaborone',CURDATE(),'live'),(2,'Kweneng','Molepolole',CURDATE() + INTERVAL 90 DAY,'planned'),
+            (3,'Central','Serowe',CURDATE() + INTERVAL 90 DAY,'planned'),(4,'Ghanzi','Ghanzi',CURDATE() + INTERVAL 180 DAY,'planned')");
+        $pdo->exec("INSERT IGNORE INTO merchants (id, code, name, area_id, kyc_status, daily_limit) VALUES
+            (1,'MQ-GAB-001','Maru Quick Main Mall',1,'verified',0),(2,'MQ-DIGITAL','Maru Digital Channels',1,'verified',0)");
+        $channels = [
+            [1, 1, 'POS', 0, 'pos-demo'], [2, 2, 'APP', 1, 'app-demo'], [3, 2, 'WEB', 1, 'web-demo'], [4, 2, 'USSD', 1, 'ussd-demo'],
+        ];
+        foreach ($channels as [$id, $m, $type, $h24, $key]) {
+            $pdo->prepare('INSERT IGNORE INTO channels (id, merchant_id, type, is_24h, api_key, api_secret) VALUES (?,?,?,?,?,?)')
+                ->execute([$id, $m, $type, $h24, $key, "$key-secret"]);
+        }
+        if ((int) $pdo->query('SELECT COUNT(*) FROM bpc_deposits')->fetchColumn() === 0) {
+            Db::tx($pdo, fn () => $app->float()->deposit(10_000_000, 'SEED-DEP-001', 'seed'));
+        }
+        $app->audit->record('seed', 'admin', 'seed', 'system', null, null, 'demo data loaded');
+        echo "Seeded: 2 merchants, 4 channels (keys pos-demo, app-demo, web-demo, ussd-demo), P100,000.00 float.\n";
+        break;
+
+    case 'setting:set': // direct set for bootstrapping a fresh install only
+        $app = App::boot();
+        $app->settings->apply($args[0], $args[1], $opt('actor', 'install'), $app->audit);
+        echo "$args[0] = $args[1]\n";
+        break;
+
+    case 'setting:request':
+        $app = App::boot();
+        $id = $app->approvals()->requestSetting($args[0], $args[1], (string) $opt('as'));
+        echo "Approval #$id requested. A different administrator must run: bin/mv setting:approve $id --as=<name>\n";
+        break;
+
+    case 'setting:approve':
+        $app = App::boot();
+        $app->approvals()->approve((int) $args[0], (string) $opt('as'));
+        echo "Approved and applied.\n";
+        break;
+
+    case 'settings':
+        $app = App::boot();
+        $out = [];
+        foreach (array_keys(\MaruVend\Settings::DEFAULTS) as $k) {
+            $out[$k] = $app->settings->get($k);
+        }
+        $out['(derived) worker_timeout_s'] = $app->settings->workerTimeout();
+        $out['(derived) channel_timeout_s'] = $app->settings->channelTimeout();
+        $out['(derived) active_endpoint'] = $app->settings->endpoint();
+        $print($out);
+        break;
+
+    case 'deposit':
+        $app = App::boot();
+        $amount = (int) round(((float) $args[0]) * 100);
+        Db::tx($app->pdo, function () use ($app, $amount, $opt) {
+            $app->float()->deposit($amount, (string) $opt('ref'), (string) $opt('by', 'finance'));
+            $app->audit->record((string) $opt('by', 'finance'), 'finance', 'float.deposit', 'bpc_deposits', $opt('ref'), null, (string) $amount);
+        });
+        $print($app->float()->position());
+        break;
+
+    case 'float':
+        $app = App::boot();
+        $p = $app->float()->position();
+        $p['below_alert'] = $app->float()->belowAlert($app->settings->int('float_alert_pct'));
+        $print($p);
+        break;
+
+    case 'worker':
+        $app = App::boot();
+        $id = $opt('id', gethostname() . ':' . getmypid());
+        $max = $opt('max') !== null ? (int) $opt('max') : null;
+        $idle = $opt('idle-exit') !== null ? (int) $opt('idle-exit') : null;
+        $n = $app->worker($id)->run($max, $idle);
+        echo "Worker $id processed $n jobs.\n";
+        break;
+
+    case 'sweep':
+        $app = App::boot();
+        echo 'Expired ' . $app->vend()->expireStale() . " stale quotes.\n";
+        break;
+
+    case 'audit:anchor':
+        $app = App::boot();
+        $print($app->audit->anchor());
+        break;
+
+    case 'audit:verify':
+        $app = App::boot();
+        $r = $app->audit->verify();
+        $print($r);
+        exit($r['ok'] ? 0 : 2);
+
+    case 'report':
+        $app = App::boot();
+        $r = $app->reports();
+        $from = $opt('from', date('Y-m-d'));
+        $to = $opt('to', date('Y-m-d', strtotime('+1 day')));
+        $rows = match ($args[0] ?? '') {
+            'sales' => $r->sales($from, $to, ['channel' => $opt('channel'), 'merchant' => $opt('merchant'), 'meter' => $opt('meter'), 'area' => $opt('area')]),
+            'pit' => $r->pointInTime((string) $opt('at', date('Y-m-d H:i:s'))),
+            'invoice' => $r->serviceFeeInvoice($from, $to),
+            'recon' => $r->reconciliation($from, $to),
+            default => throw new InvalidArgumentException('report sales|pit|invoice|recon'),
+        };
+        if ($opt('format') === 'csv') {
+            echo Reports::toCsv($rows);
+        } else {
+            $print($rows);
+        }
+        break;
+
+    case 'export':
+        $app = App::boot();
+        $from = $opt('from', date('Y-m-d'));
+        $to = $opt('to', date('Y-m-d', strtotime('+1 day')));
+        $csv = Reports::toCsv($app->reports()->sales($from, $to));
+        $out = (string) $opt('out', sys_get_temp_dir() . "/bpc-sales-$from.csv.gpg");
+        EncryptedExport::fromEnv($app->audit)->export("sales $from..$to", $csv, $out, (string) $opt('as', 'reports'));
+        echo "Encrypted export written to $out\n";
+        break;
+
+    case 'loadtest':
+        // Fire N simultaneous sales from POS, app and web through the API and let the queue throttle them.
+        $base = $opt('api', 'http://127.0.0.1:8080');
+        $n = (int) $opt('n', '30');
+        $keys = ['pos-demo', 'app-demo', 'web-demo'];
+        $meters = ['04040404040', '94949494949', '01234567890'];
+        $call = function (string $key, string $method, string $path, array $body = []) use ($base) {
+            $json = $body ? json_encode($body) : '';
+            $ts = (string) time();
+            $ch = curl_init($base . $path);
+            curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => $method, CURLOPT_RETURNTRANSFER => true, CURLOPT_POSTFIELDS => $json ?: null,
+                CURLOPT_HTTPHEADER => ['Content-Type: application/json', "X-MV-Key: $key", "X-MV-Timestamp: $ts",
+                    'X-MV-Signature: ' . HmacAuth::sign("$key-secret", $ts, $method, $path, $json)]]);
+            return $ch;
+        };
+        $run = $opt('run', bin2hex(random_bytes(3)));
+        $t0 = microtime(true);
+        // 1. confirm + accept all sales concurrently
+        $mh = curl_multi_init();
+        $handles = [];
+        for ($i = 0; $i < $n; $i++) {
+            $key = $keys[$i % 3];
+            $h = $call($key, 'POST', '/v1/confirm', ['meter' => $meters[$i % 3], 'amount' => 20 + $i, 'idempotency_key' => "lt-$run-$i"]);
+            curl_multi_add_handle($mh, $h);
+            $handles[$i] = [$h, $key];
+        }
+        do { curl_multi_exec($mh, $active); curl_multi_select($mh); } while ($active);
+        $sales = [];
+        foreach ($handles as $i => [$h, $key]) {
+            $r = json_decode((string) curl_multi_getcontent($h), true);
+            if (isset($r['sale_id'])) {
+                $sales[] = [$r['sale_id'], $key];
+            }
+        }
+        $mh = curl_multi_init();
+        foreach ($sales as [$id, $key]) {
+            curl_multi_add_handle($mh, $call($key, 'POST', '/v1/vend', ['sale_id' => $id]));
+        }
+        do { curl_multi_exec($mh, $active); curl_multi_select($mh); } while ($active);
+        // Card/mobile-money payment confirmations for app and web
+        $mh = curl_multi_init();
+        foreach ($sales as [$id, $key]) {
+            if ($key !== 'pos-demo') {
+                curl_multi_add_handle($mh, $call($key, 'POST', "/v1/sales/$id/payment", ['payment_ref' => "PAY-$run-$id"]));
+            }
+        }
+        do { curl_multi_exec($mh, $active); curl_multi_select($mh); } while ($active);
+        $accepted = round(microtime(true) - $t0, 2);
+        echo count($sales) . " sales accepted by the API in {$accepted}s and queued. Waiting for workers...\n";
+        $app = App::boot();
+        $ids = implode(',', array_map(fn ($s) => (int) $s[0], $sales)) ?: '0';
+        do {
+            usleep(500_000);
+            $left = (int) $app->pdo->query("SELECT COUNT(*) FROM vend_sales WHERE id IN ($ids) AND state IN ('RESERVED','SUBMITTED','PAYMENT_PENDING')")->fetchColumn();
+        } while ($left > 0 && microtime(true) - $t0 < 300);
+        $states = $app->pdo->query("SELECT state, COUNT(*) n FROM vend_sales WHERE id IN ($ids) GROUP BY state")->fetchAll(PDO::FETCH_KEY_PAIR);
+        $stats = json_decode((string) @file_get_contents(rtrim($app->settings->endpoint(), '/') . '/_sim/stats'), true);
+        $print(['sales' => count($sales), 'outcomes' => $states, 'seconds' => round(microtime(true) - $t0, 1),
+            'rate_limit_per_s' => $app->settings->int('rate_per_s'), 'bpc_side' => $stats]);
+        break;
+
+    case 'user:add':
+        // bin/mv user:add <username> <role: admin|finance|support|bpc_viewer>  (password read from MV_NEW_PASSWORD or generated)
+        $app = App::boot();
+        $pw = getenv('MV_NEW_PASSWORD') ?: bin2hex(random_bytes(8));
+        $secret = \MaruVend\Support\Totp::newSecret();
+        $app->pdo->prepare('INSERT INTO users (username, password_hash, role, totp_secret) VALUES (?,?,?,?)')
+            ->execute([$args[0], password_hash($pw, PASSWORD_DEFAULT), $args[1], $secret]);
+        $app->audit->record((string) $opt('as', 'install'), 'admin', 'user.create', 'users', $args[0], null, $args[1]);
+        echo "User {$args[0]} ({$args[1]}) created.\nPassword: $pw\nAdd to authenticator app: " . \MaruVend\Support\Totp::uri($secret, $args[0]) . "\n";
+        break;
+
+    case 'totp': // current code for a user (test environment only)
+        $app = App::boot();
+        $st = $app->pdo->prepare('SELECT totp_secret FROM users WHERE username = ?');
+        $st->execute([$args[0]]);
+        echo \MaruVend\Support\Totp::code((string) $st->fetchColumn()) . "\n";
+        break;
+
+    default:
+        echo <<<TXT
+        Maru Vend command line
+
+          migrate | seed
+          settings                              show settings and derived timeouts
+          setting:set <name> <value>            bootstrap only (fresh install)
+          setting:request <name> <value> --as=admin1
+          setting:approve <id> --as=admin2      two-person approval
+          deposit <pula> --ref=BANKREF --by=name
+          float
+          worker [--id=w1] [--max=N] [--idle-exit=S]
+          sweep                                 expire stale quotes
+          audit:anchor | audit:verify
+          report sales|pit|invoice|recon [--from=Y-m-d --to=Y-m-d --at='Y-m-d H:i:s' --format=csv]
+          export [--from --to --out=file.gpg]   encrypted to BPC's key
+          loadtest [--n=30 --api=http://127.0.0.1:8080]
+          user:add <username> <admin|finance|support|bpc_viewer>
+
+        TXT;
+}

@@ -1,0 +1,20 @@
+{
+  "name": "maruquick/maru-vend",
+  "description": "Maru Vend: BPC prepaid electricity vending platform",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": ">=8.3",
+    "ext-pdo": "*",
+    "ext-curl": "*",
+    "slim/slim": "^4.14",
+    "slim/psr7": "^1.7"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^11.5"
+  },
+  "autoload": { "psr-4": { "MaruVend\\": "src/" } },
+  "autoload-dev": { "psr-4": { "MaruVend\\Tests\\": "tests/" } },
+  "scripts": { "test": "phpunit" },
+  "config": { "sort-packages": true }
+}
