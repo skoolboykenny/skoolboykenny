@@ -1,8 +1,0 @@
-- name: restart php-fpm
-  ansible.builtin.service: { name: php8.3-fpm, state: restarted }
-- name: reload nginx
-  ansible.builtin.service: { name: nginx, state: reloaded }
-- name: restart maruvend services
-  ansible.builtin.shell: systemctl daemon-reload && systemctl restart 'maruvend-worker@*' maruvend-sms
-- name: reload nftables
-  ansible.builtin.service: { name: nftables, state: reloaded }

@@ -1,4 +1,0 @@
-- name: restart etcd
-  ansible.builtin.systemd: { name: etcd, state: restarted, daemon_reload: true }
-- name: reload nftables
-  ansible.builtin.service: { name: nftables, state: reloaded }

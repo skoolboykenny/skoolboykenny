@@ -1,3 +1,0 @@
-# Managed by Ansible (role vpn). Input rules: IKE and ESP from BPC's peer only.
-udp dport { 500, 4500 } ip saddr {{ bpc_vpn_peer }} accept
-ip protocol esp ip saddr {{ bpc_vpn_peer }} accept

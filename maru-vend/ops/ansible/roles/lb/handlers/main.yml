@@ -1,6 +1,0 @@
-- name: reload haproxy
-  ansible.builtin.service: { name: haproxy, state: reloaded }
-- name: restart keepalived
-  ansible.builtin.service: { name: keepalived, state: restarted }
-- name: reload nftables
-  ansible.builtin.service: { name: nftables, state: reloaded }

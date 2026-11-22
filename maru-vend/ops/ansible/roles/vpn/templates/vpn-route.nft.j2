@@ -1,4 +1,0 @@
-# Managed by Ansible (role vpn). Forward rules: only the application (XMLVend client) subnet may
-# reach BPC's vending gateway, and only inside IPsec. Anything else to BPC is logged and dropped.
-ip saddr {{ app_subnet[mv_site] }} ip daddr {{ bpc_vending_ip }} meta ipsec exists accept
-ip daddr {{ bpc_vending_ip }} log prefix "DENY-TO-BPC " drop
