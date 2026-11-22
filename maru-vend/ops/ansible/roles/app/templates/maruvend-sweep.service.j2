@@ -1,0 +1,13 @@
+[Unit]
+Description=Maru Vend: Expire stale quotes
+
+[Service]
+Type=oneshot
+User=maruvend
+EnvironmentFile=/etc/maruvend/env
+WorkingDirectory={{ mv_app_dir }}
+ExecStart=/usr/bin/php bin/mv sweep
+NoNewPrivileges=true
+ProtectSystem=strict
+PrivateTmp=true
+ReadWritePaths=/var/lib/maruvend /var/log/maruvend

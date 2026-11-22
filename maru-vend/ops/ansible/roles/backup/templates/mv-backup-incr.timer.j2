@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly incremental database backup
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+Unit=mv-backup@incr.service
+
+[Install]
+WantedBy=timers.target

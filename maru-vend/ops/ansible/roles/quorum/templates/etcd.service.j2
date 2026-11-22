@@ -1,0 +1,26 @@
+[Unit]
+Description=etcd quorum voter for Maru Vend active-site decisions
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=etcd
+ExecStart=/usr/local/bin/etcd \
+  --name {{ inventory_hostname }} \
+  --data-dir /var/lib/etcd \
+  --listen-client-urls https://{{ ansible_host }}:2379 \
+  --advertise-client-urls https://{{ ansible_host }}:2379 \
+  --listen-peer-urls https://{{ ansible_host }}:2380 \
+  --initial-advertise-peer-urls https://{{ ansible_host }}:2380 \
+  --initial-cluster {% for h in groups['quorum'] %}{{ h }}=https://{{ hostvars[h].ansible_host }}:2380{{ ',' if not loop.last }}{% endfor %} \
+  --initial-cluster-state new \
+  --client-cert-auth --trusted-ca-file /etc/etcd/ca.crt --cert-file /etc/etcd/server.crt --key-file /etc/etcd/server.key \
+  --peer-client-cert-auth --peer-trusted-ca-file /etc/etcd/ca.crt --peer-cert-file /etc/etcd/server.crt --peer-key-file /etc/etcd/server.key
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/etcd
+
+[Install]
+WantedBy=multi-user.target

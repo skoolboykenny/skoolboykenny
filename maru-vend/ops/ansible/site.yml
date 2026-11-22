@@ -1,0 +1,38 @@
+# Maru Vend production build. Run per site to limit blast radius:
+#   ansible-playbook site.yml --limit site_primary
+#   ansible-playbook site.yml --limit site_dr
+#   ansible-playbook site.yml --limit witness
+# Secrets: ansible-playbook ... --ask-vault-pass (group_vars/vault.yml)
+- name: Baseline on every server
+  hosts: all
+  become: true
+  roles: [common, monitoring]
+
+- name: Quorum voters (one per site + witness)
+  hosts: quorum
+  become: true
+  roles: [quorum]
+
+- name: Databases
+  hosts: db
+  become: true
+  roles: [mariadb, ops_tools, backup]
+
+- name: Application servers
+  hosts: app
+  become: true
+  roles: [app]
+
+- name: Load balancers
+  hosts: lb
+  become: true
+  roles: [lb]
+
+- name: VPN gateways to BPC
+  hosts: vpn
+  become: true
+  vars:
+    bpc_vpn_peer: "{{ vault_bpc_vpn_peer | default('<bpc-vpn-peer-ip>') }}"
+    bpc_vpn_id: "{{ vault_bpc_vpn_id | default('<bpc-gateway-id>') }}"
+    bpc_vending_ip: "{{ vault_bpc_vending_ip | default('<bpc-vending-gateway-ip>') }}"
+  roles: [vpn]
