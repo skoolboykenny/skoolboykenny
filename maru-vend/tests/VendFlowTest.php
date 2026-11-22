@@ -179,4 +179,13 @@ final class VendFlowTest extends TestCase
         $this->assertSame(1, $this->provider->vendCalls());
         $this->assertSame(1, (int) $this->pdo->query("SELECT COUNT(*) FROM float_ledger WHERE entry_type='settle'")->fetchColumn());
     }
+
+    public function testConfirmedNotProcessedFromProviderFailsAtOnce(): void
+    {
+        $this->provider->vendQueue[] = new ProviderResult(ProviderResult::NOT_FOUND, [], 'LastResponseEx', 'not processed');
+        $s = $this->posSale();
+        $this->vend->processVend((int) $s['id']);
+        $this->assertSame('FAILED', $this->vend->sale((int) $s['id'])['state']);
+        $this->assertSame(0, $this->float()['reserved']);
+    }
 }

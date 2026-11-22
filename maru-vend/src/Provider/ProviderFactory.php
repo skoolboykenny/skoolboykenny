@@ -4,11 +4,18 @@ declare(strict_types=1);
 namespace MaruVend\Provider;
 
 use MaruVend\Config;
+use MaruVend\Provider\XmlVend\XmlVendConfig;
+use MaruVend\Provider\XmlVend\XmlVendProvider;
 use MaruVend\Settings;
+use PDO;
 
 final class ProviderFactory
 {
-    public static function make(Settings $settings): VendProvider
+    /**
+     * @param string $process who is calling (a queue worker's id, or "api"); XMLVend gives each its
+     *                        own terminal ID so per-terminal "last response" is never ambiguous.
+     */
+    public static function make(Settings $settings, ?PDO $pdo = null, string $process = 'api'): VendProvider
     {
         return match ($settings->get('provider')) {
             // The simulator speaks the aggregator REST API; credentials are dummies.
@@ -21,8 +28,22 @@ final class ProviderFactory
                 (string) Config::env('MV_AGG_OPERATOR', 'maru-vend'),
                 'aggregator'
             ),
-            // 'xmlvend' => XMLVend 2.1 SOAP client for BPC CONLOG: added once BPC supplies its WSDL/XSDs.
+            // XMLVend 2.1 SOAP client for BPC CONLOG (clause 7.1). With the BPC simulator for testing,
+            // set bpc_endpoint to the simulator and provider to 'xmlvend'.
+            'xmlvend' => new XmlVendProvider(
+                $settings,
+                $pdo ?? throw new \RuntimeException('XMLVend provider needs the database'),
+                XmlVendConfig::fromEnv(),
+                self::terminalId($process),
+            ),
             default => throw new \RuntimeException('Unsupported provider ' . $settings->get('provider')),
         };
+    }
+
+    /** Stable terminal ID per process, e.g. MV-W3F9A1C02 (GenericDeviceID, max 160 chars). */
+    public static function terminalId(string $process): string
+    {
+        $prefix = (string) Config::env('MV_XV_TERMINAL_PREFIX', 'MV');
+        return $prefix . '-' . ($process === 'api' ? 'API' : 'W') . strtoupper(substr(hash('sha256', (string) gethostname() . '|' . $process), 0, 8));
     }
 }

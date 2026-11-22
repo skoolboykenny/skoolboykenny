@@ -31,7 +31,7 @@ vendor/bin/phpunit               # 24 tests
 
 | Requirement | Implementation | Demonstrate with |
 |---|---|---|
-| 7.1 XMLVend 2.1 only | `src/Provider/VendProvider.php` port; the XMLVend adapter is added once BPC supplies its WSDL/XSD | `bin/mv settings` (provider) |
+| 7.1 XMLVend 2.1 only | `src/Provider/XmlVend/`: client from NRS 009-6-10 (confirm customer, credit vend, advise last response); see `docs/xmlvend.md` | `bin/mv setting:set provider xmlvend`, then the load and fault demos |
 | 7.2 / 7.3 SSL + VPN, AES-256, SHA-256/384, DH19/14, RSA 2048 | TLS verification enforced in `RestVendProvider`; `ops/strongswan/swanctl.conf`; `ops/firewall/nftables.conf` | `swanctl --list-sas`, weak peer rejected |
 | 7.4 audit trail | `src/Audit/AuditLog.php`: hash chain, plus signed anchors stored outside the DB | dashboard → Audit trail → Verify; `scripts/tamper-demo.sh` |
 | 7.5 protected exports | `src/Export/EncryptedExport.php`: OpenPGP AES-256 to BPC's key, signed by Maru Quick | dashboard → Reports → download |
@@ -116,7 +116,7 @@ Validate the automation: `cd ops/ansible && ansible-playbook site.yml --syntax-c
 
 ## Not yet built
 
-- XMLVend 2.1 SOAP adapter. Needs BPC's WSDL/XSD (NRS 009-6-10 is the public spec).
+- XMLVend: confirm the revenue message element names against BPC's XSD/WSDL (list in `docs/xmlvend.md`).
 - Live payment integrations (Orange Money, MyZaka, Smega, card) and the contracted SMS provider.
 - USSD short code (BOCRA/MNO application at award).
 - Real servers: the automation is ready; the hardware, data centre contracts and BPC network details are needed.
