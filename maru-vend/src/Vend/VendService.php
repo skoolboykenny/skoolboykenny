@@ -184,6 +184,10 @@ final class VendService
                 case ProviderResult::BUSINESS_FAULT:
                     $this->fail($sale, 'BPC refused: ' . ($r->message ?? 'fault'), $r->faultCode);
                     break;
+                case ProviderResult::NOT_FOUND:
+                    // The provider already confirmed (via last response) that the sale was not processed.
+                    $this->fail($sale, 'BPC confirmed the sale was not processed: ' . ($r->message ?? ''), $r->faultCode);
+                    break;
                 case ProviderResult::SYSTEM_FAULT:
                     if ((int) $sale['attempts'] >= 5) {
                         $this->fail($sale, 'Not processed by BPC after 5 attempts: ' . ($r->message ?? ''), $r->faultCode);

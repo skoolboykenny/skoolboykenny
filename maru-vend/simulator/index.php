@@ -17,6 +17,7 @@ declare(strict_types=1);
  *       down       503 with no body (gateway unavailable)
  *   GET  /_sim/stats  load seen by "BPC": total requests, peak concurrency, peak requests/second
  *   POST /_sim/reset
+ *   POST /xmlvend     XMLVend 2.1 SOAP endpoint (simulator/xmlvend.php), same fault modes, plus 'kct'
  *
  * Results of this simulator are never evidence of certification. Certification is done
  * against BPC's own test environment by BPC's authorised supplier.
@@ -92,11 +93,12 @@ if ($path === '/_sim/mode' && $method === 'POST') {
 }
 if ($path === '/_sim/reset' && $method === 'POST') {
     $db->exec("DELETE FROM sales; DELETE FROM hits; UPDATE mode SET mode = 'ok', remaining = 0");
+    $db->exec("DROP TABLE IF EXISTS xv_msgs; DROP TABLE IF EXISTS xv_last");
     out(200, ['ok' => true]);
 }
 if ($path === '/_sim/stats') {
     // Peak concurrency: replay start/end events in time order.
-    $events = $db->query("SELECT t, phase FROM hits WHERE path LIKE '/electricity/%' ORDER BY t")->fetchAll();
+    $events = $db->query("SELECT t, phase FROM hits WHERE path LIKE '/electricity/%' OR path LIKE '/xmlvend/%' ORDER BY t")->fetchAll();
     $cur = $peak = $total = 0;
     $perSec = [];
     foreach ($events as $e) {
@@ -110,6 +112,12 @@ if ($path === '/_sim/stats') {
         $peak = max($peak, $cur);
     }
     out(200, ['requests' => $total, 'peak_concurrent' => $peak, 'peak_per_second' => $perSec ? max($perSec) : 0]);
+}
+
+// ------------------------------------------------------------------ XMLVend 2.1 (SOAP)
+if ($path === '/xmlvend' && $method === 'POST') {
+    require __DIR__ . '/xmlvend.php';
+    exit;
 }
 
 // ------------------------------------------------------------------ vending API

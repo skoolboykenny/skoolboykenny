@@ -251,3 +251,19 @@ CREATE TABLE IF NOT EXISTS sms_outbox (
   KEY ix_status (status),
   KEY ix_msisdn (msisdn)
 ) ENGINE=InnoDB;
+
+-- XMLVend 2.1 message identifiers (NRS 009-6-10 5.2.4.3). Allocated and stored BEFORE a request is
+-- sent, so a last-response advice can always name the exact request. Each request gets a new
+-- msgID (the server rejects duplicates); advice names the most recent credit vend for the sale.
+CREATE TABLE IF NOT EXISTS xmlvend_messages (
+  id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+  client_sale_id VARCHAR(32) NOT NULL,
+  operation      VARCHAR(24) NOT NULL,
+  terminal_id    VARCHAR(40) NOT NULL,
+  msg_datetime   CHAR(14) NOT NULL,
+  msg_unique     INT NOT NULL,
+  created_at     DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  UNIQUE KEY uq_msgid (terminal_id, msg_datetime, msg_unique),
+  KEY ix_sale (client_sale_id, operation),
+  KEY ix_terminal (terminal_id, id)
+) ENGINE=InnoDB;

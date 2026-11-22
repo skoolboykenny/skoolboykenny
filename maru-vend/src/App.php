@@ -20,6 +20,8 @@ final class App
     public readonly Settings $settings;
     public readonly AuditLog $audit;
 
+    private string $process = 'api';
+
     public function __construct(public readonly PDO $pdo, ?string $ip = null, private ?VendProvider $provider = null)
     {
         $this->settings = new Settings($pdo);
@@ -33,7 +35,7 @@ final class App
 
     public function provider(): VendProvider
     {
-        return $this->provider ??= ProviderFactory::make($this->settings);
+        return $this->provider ??= ProviderFactory::make($this->settings, $this->pdo, $this->process);
     }
 
     public function vend(): VendService
@@ -43,6 +45,9 @@ final class App
 
     public function worker(string $id): Worker
     {
+        if ($this->provider === null) {
+            $this->process = $id; // own XMLVend terminal per worker
+        }
         return new Worker($this->pdo, $this->settings, $this->vend(), $id);
     }
 
