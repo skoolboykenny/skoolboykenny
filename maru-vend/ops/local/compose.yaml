@@ -1,0 +1,79 @@
+# Local sample of Maru Vend selling through XMLVend 2.1 to the BPC simulator (TEST / DEMO ONLY).
+# Start:  docker compose -f ops/local/compose.yaml up --build
+# Demo credentials only: never reuse these values outside this sample.
+name: maruvend-sample
+
+x-app: &app
+  build: { context: ../.., dockerfile: ops/local/Dockerfile }
+  image: maruvend-sample
+  environment: &env
+    MV_DB_HOST: db
+    MV_DB_PASS: devpass
+    MV_DEMO: "1"
+    MV_CORE_URL: http://api:8080
+    MV_SMS_PROVIDER: log
+    MV_SMS_LOG: /tmp/sms.log
+    # XMLVend client (src/Provider/XmlVend). The simulator accepts these demo values.
+    MV_XV_CLIENT_EAN: "6001234567890"
+    MV_XV_OPNAME: maruvend
+    MV_XV_PASSWORD: sim-password
+    MV_XV_GZIP: "0"
+  restart: unless-stopped
+
+services:
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: maruvend
+      MARIADB_USER: maruvend
+      MARIADB_PASSWORD: devpass
+      MARIADB_ROOT_PASSWORD: devroot
+      TZ: Africa/Gaborone
+    volumes: [db:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      retries: 30
+
+  # BPC simulator: XMLVend 2.1 SOAP endpoint at /xmlvend with fault injection (POST /_sim/mode).
+  sim:
+    <<: *app
+    environment: { <<: *env, PHP_CLI_SERVER_WORKERS: "16" }
+    command: php -S 0.0.0.0:8099 simulator/index.php
+    ports: ["127.0.0.1:8099:8099"]
+
+  # One-off: schema, demo data, and the settings that route sales over XMLVend to the simulator.
+  init:
+    <<: *app
+    restart: "no"
+    depends_on: { db: { condition: service_healthy } }
+    command: ops/local/init.sh
+
+  api:
+    <<: *app
+    environment: { <<: *env, PHP_CLI_SERVER_WORKERS: "16" }
+    depends_on: { init: { condition: service_completed_successfully } }
+    command: php -S 0.0.0.0:8080 -t public public/index.php
+    ports: ["127.0.0.1:8080:8080"]
+
+  channels:
+    <<: *app
+    environment: { <<: *env, PHP_CLI_SERVER_WORKERS: "8" }
+    depends_on: { init: { condition: service_completed_successfully } }
+    command: php -S 0.0.0.0:8081 -t channels/public channels/public/index.php
+    ports: ["127.0.0.1:8081:8081"]
+
+  # Queue workers: each container is its own XMLVend terminal (terminal ID from its hostname).
+  worker:
+    <<: *app
+    depends_on: { init: { condition: service_completed_successfully } }
+    command: php bin/mv worker
+    deploy: { replicas: 4 }
+
+  sms:
+    <<: *app
+    depends_on: { init: { condition: service_completed_successfully } }
+    command: php bin/mv sms
+
+volumes:
+  db:
