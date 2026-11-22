@@ -1,0 +1,9 @@
+[Unit]
+Description=HTTP primary check for HAProxy (200 only from the writable database)
+
+[Socket]
+ListenStream=9200
+Accept=yes
+
+[Install]
+WantedBy=sockets.target

@@ -1,0 +1,15 @@
+main { max-width: 720px; }
+.slip { display: none; }
+@media print {
+  @page { size: 58mm auto; margin: 2mm; }
+  body { background: #fff; color: #000; }
+  .no-print { display: none !important; }
+  .slip { display: block; width: 54mm; font: 9pt/1.3 ui-monospace, Menlo, Consolas, monospace; color: #000; }
+  .slip img { display: block; width: 30mm; margin: 0 auto 2mm; }
+  .slip .c { text-align: center; }
+  .slip .b { font-weight: 700; }
+  .slip .l { display: flex; justify-content: space-between; gap: 2mm; }
+  .slip .l span:last-child { text-align: right; }
+  .slip .tok { font-size: 11pt; letter-spacing: .3px; word-break: break-word; }
+  .slip hr { border: 0; border-top: 1px dashed #000; margin: 1.5mm 0; }
+}

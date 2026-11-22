@@ -1,0 +1,55 @@
+# Managed by Ansible (role mariadb)
+[mysqld]
+bind-address            = 0.0.0.0
+port                    = {{ db_port }}
+server_id               = {{ mariadb_server_id }}
+default_time_zone       = '+02:00'
+character_set_server    = utf8mb4
+collation_server        = utf8mb4_unicode_ci
+skip_name_resolve       = ON
+
+# Every server starts fenced. Only mv-failover makes a database writable.
+read_only               = ON
+
+# Replication: GTID, row-based, crash-safe
+log_bin                 = /var/lib/mysql/binlog
+binlog_format           = ROW
+log_slave_updates       = ON
+gtid_strict_mode        = ON
+gtid_domain_id          = 0
+expire_logs_days        = 7
+sync_binlog             = 1
+relay_log_recovery      = ON
+slave_parallel_threads  = 4
+# Semi-synchronous: a commit returns only when at least one replica has the transaction (RPO ~0).
+rpl_semi_sync_master_enabled = ON
+rpl_semi_sync_slave_enabled  = ON
+rpl_semi_sync_master_timeout = 2000
+
+# Durability
+innodb_flush_log_at_trx_commit = 1
+innodb_buffer_pool_size = {{ (ansible_memtotal_mb * 0.6) | int }}M
+innodb_file_per_table   = ON
+
+# Encryption at rest for data, logs and temporary files
+plugin_load_add         = file_key_management
+file_key_management_filename = /etc/mysql/encryption/keyfile.enc
+file_key_management_filekey  = FILE:/etc/mysql/encryption/keyfile.key
+innodb_encrypt_tables   = ON
+innodb_encrypt_log      = ON
+encrypt_binlog          = ON
+encrypt_tmp_files       = ON
+
+# TLS for app and replication connections
+ssl_cert                = /etc/mysql/tls/server.crt
+ssl_key                 = /etc/mysql/tls/server.key
+ssl_ca                  = /etc/mysql/tls/ca.crt
+require_secure_transport = ON
+
+# Server audit plugin: administrator database actions (clause 7.4), shipped off-host by rsyslog
+plugin_load_add         = server_audit
+server_audit_logging    = ON
+server_audit_events     = CONNECT,QUERY_DDL,QUERY_DML_NO_SELECT,QUERY_DCL
+server_audit_excl_users = {{ db_app_user }},{{ db_repl_user }}
+server_audit_output_type = syslog
+server_audit_syslog_ident = mariadb-audit

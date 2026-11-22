@@ -1,0 +1,18 @@
+.layout { display: grid; grid-template-columns: 300px 1fr; gap: 24px; align-items: start; }
+@media (max-width: 720px) { .layout { grid-template-columns: 1fr; } .phone { margin: 0 auto; } }
+.phone { width: 280px; background: #222; border-radius: 36px; padding: 18px 16px 20px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+.speaker { width: 60px; height: 6px; background: #444; border-radius: 3px; margin: 0 auto 12px; }
+.screen { background: #cfe6c8; color: #10210d; border-radius: 6px; min-height: 260px; padding: 8px; font: 15px/1.35 ui-monospace, Menlo, Consolas, monospace; }
+.status { display: flex; justify-content: space-between; font-size: 12px; border-bottom: 1px solid #9db896; margin-bottom: 6px; }
+.screen pre { margin: 0; white-space: pre-wrap; font: inherit; min-height: 180px; }
+.screen form { display: flex; gap: 6px; margin-top: 6px; }
+.screen input { font: inherit; font-size: 16px; padding: 6px; border: 1px solid #7c9a74; background: #e4f2df; color: #10210d; border-radius: 4px; }
+.screen button { font: inherit; padding: 6px 10px; border: 1px solid #7c9a74; background: #b4d3ab; border-radius: 4px; }
+.keys { display: flex; gap: 10px; margin-top: 14px; }
+.keys button { flex: 1; border: 0; border-radius: 18px; padding: 10px; font-weight: 700; color: #fff; }
+.keys .call { background: #1f9d4c; }
+.keys .end { background: #c62828; }
+.num { color: #ccc; font-weight: 400; font-size: 12px; margin-top: 12px; }
+.num input { font-size: 14px; padding: 6px; margin-top: 4px; }
+.sms { background: var(--surface); border: 1px solid var(--line); border-radius: 12px 12px 12px 2px; padding: 10px 12px; margin: 8px 0; max-width: 520px; }
+.sms small { display: block; color: var(--muted); margin-top: 4px; }
