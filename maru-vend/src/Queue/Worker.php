@@ -61,6 +61,11 @@ final class Worker
     {
         $done = 0;
         $idleSince = time();
+        try {
+            $this->vend->signIn(); // resolve a credit vend left open by a crash before taking new work
+        } catch (\Throwable $e) {
+            error_log("[worker {$this->workerId}] sign-in check: {$e->getMessage()} (it runs again before every send)");
+        }
         while ($maxJobs === null || $done < $maxJobs) {
             if ($this->runOnce()) {
                 $done++;

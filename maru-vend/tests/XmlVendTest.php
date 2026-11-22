@@ -64,6 +64,28 @@ final class XmlVendTest extends TestCase
         $this->assertSame(ProviderResult::UNKNOWN, FaultMap::outcome('SomethingNew', 'creditvend'));
     }
 
+    public function testRegionalProfileFaultsAreNeverMistakenForBusinessRules(): void
+    {
+        // The "...Ex = business rule" suffix rule would refund these; neither proves no token was issued.
+        $this->assertSame(ProviderResult::SYSTEM_FAULT, FaultMap::outcome('DuplicateMsgIDEx', 'creditvend'), 'this request rejected: retry with a new msgID');
+        $this->assertSame(ProviderResult::SYSTEM_FAULT, FaultMap::outcome('e:duplicateMsgIDEx', 'creditvend'), 'case as in the test-suite document');
+        $this->assertSame(ProviderResult::PENDING, FaultMap::outcome('IndeterminateLastResponseEx', 'advice'));
+        $this->assertSame(ProviderResult::PENDING, FaultMap::outcome('IndeterminantLastResponseEx', 'advice'), 'spelling in extensions 1.6');
+        $this->assertSame(ProviderResult::BUSINESS_FAULT, FaultMap::outcome('MeterDataMisMatchEx', 'creditvend'));
+        $this->assertSame(ProviderResult::BUSINESS_FAULT, FaultMap::outcome('RequireMeterCardEx', 'creditvend'));
+    }
+
+    public function testClientIdMustBeA13DigitEanDeviceId(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new XmlVendConfig('BPC-001', 'maruvend', 'x');
+    }
+
+    public function testGzipIsOffUnlessEnabled(): void
+    {
+        $this->assertFalse((new XmlVendConfig('6001234567890', 'maruvend', 'x'))->gzip, 'certification interceptor needs uncompressed messages');
+    }
+
     // ------------------------------------------------------------------ against the simulator
 
     public function testSaleThroughSimulator(): void
@@ -117,15 +139,60 @@ final class XmlVendTest extends TestCase
         $this->assertSame(ProviderResult::NOT_FOUND, $r->outcome, 'LastResponseEx: not processed');
     }
 
-    public function testAmbiguousTerminalIsNeverTreatedAsFailed(): void
+    public function testSignInResolvesAnOpenSaleBeforeTheTerminalSendsAgain(): void
     {
-        // Sale S6's outcome is uncertain, then the same terminal sends another sale before advising.
+        // Sale S6's outcome is uncertain (e.g. the worker died), then the same terminal is asked to
+        // sell again. The sign-in check advises S6 first, so the answer is definitive, not ambiguous.
         $this->simMode('lostfail');
         $this->app->settings->apply('advice_first_delay_s', '100', 't', $this->app->audit); // no inline advice: stays UNKNOWN
         $p = $this->provider('MV-T6');
         $this->assertSame(ProviderResult::UNKNOWN, $p->creditVend('S6', '94949494949', 2000, 'POS')->outcome);
         $this->assertTrue($p->creditVend('S7', '94949494949', 2000, 'POS')->ok());
+        $ids = $this->pdo->query("SELECT operation FROM xmlvend_messages WHERE terminal_id='MV-T6' ORDER BY id")->fetchAll(\PDO::FETCH_COLUMN);
+        $this->assertSame(['creditvend', 'advice', 'creditvend'], $ids, 'advice for S6 went before S7');
         $a = $p->lastResponse('S6');
+        $this->assertSame(ProviderResult::NOT_FOUND, $a->outcome, 'LastResponseEx obtained before the terminal moved on');
+    }
+
+    public function testTokenLostInACrashIsRecoveredAtSignIn(): void
+    {
+        $this->simMode('lost');
+        $this->app->settings->apply('advice_first_delay_s', '100', 't', $this->app->audit);
+        $p = $this->provider('MV-T11');
+        $this->assertSame(ProviderResult::UNKNOWN, $p->creditVend('S11', '94949494949', 2000, 'POS')->outcome);
+        // A fresh process on the same terminal (worker restart) signs in before doing anything else.
+        $this->assertNull($this->provider('MV-T11')->signIn());
+        $this->assertTrue($this->provider('MV-T11')->creditVend('S12', '94949494949', 2000, 'POS')->ok());
+        $r = $this->provider('MV-T11')->lastResponse('S11');
+        $this->assertTrue($r->ok(), 'token for S11 comes from the response stored at sign-in: ' . $r->message);
+        $this->assertMatchesRegularExpression('/^\d{20}$/', $r->data['token']);
+        $this->assertSame(1, (int) $this->pdo->query("SELECT COUNT(*) FROM xmlvend_messages WHERE terminal_id='MV-T11' AND operation='advice'")->fetchColumn(),
+            'stored outcome reused, not asked again');
+    }
+
+    public function testIndeterminateLastResponseHoldsTheSaleAndFreesTheTerminal(): void
+    {
+        $this->simMode('lostindet');
+        $this->app->settings->apply('advice_first_delay_s', '100', 't', $this->app->audit);
+        $p = $this->provider('MV-T12');
+        $this->assertSame(ProviderResult::UNKNOWN, $p->creditVend('S13', '94949494949', 2000, 'POS')->outcome);
+        $this->assertTrue($p->creditVend('S14', '94949494949', 2000, 'POS')->ok(), 'terminal is not blocked forever');
+        $a = $p->lastResponse('S13');
+        $this->assertSame(ProviderResult::PENDING, $a->outcome, 'held for reconciliation, never failed');
+        $this->assertSame('IndeterminateLastResponseEx', $a->faultCode);
+    }
+
+    public function testAmbiguousTerminalIsNeverTreatedAsFailed(): void
+    {
+        // Rows from before the sign-in check (or written by another tool): the terminal sent another
+        // request after S15 without advising it, so LastResponseEx no longer proves "not processed".
+        $this->simMode('lostfail');
+        $this->app->settings->apply('advice_first_delay_s', '100', 't', $this->app->audit);
+        $p = $this->provider('MV-T13');
+        $this->assertSame(ProviderResult::UNKNOWN, $p->creditVend('S15', '94949494949', 2000, 'POS')->outcome);
+        $this->pdo->exec("UPDATE xmlvend_messages SET answered = 1 WHERE client_sale_id = 'S15'"); // bypass sign-in
+        $this->assertTrue($p->creditVend('S16', '94949494949', 2000, 'POS')->ok());
+        $a = $p->lastResponse('S15');
         $this->assertSame(ProviderResult::PENDING, $a->outcome, 'must not conclude "not processed"');
         $this->assertSame('LastResponseEx-AMBIGUOUS', $a->faultCode);
     }

@@ -262,8 +262,17 @@ CREATE TABLE IF NOT EXISTS xmlvend_messages (
   terminal_id    VARCHAR(40) NOT NULL,
   msg_datetime   CHAR(14) NOT NULL,
   msg_unique     INT NOT NULL,
+  -- 1 once the server gave a definite answer to this request (a response or a fault). A credit vend
+  -- left at 0 is the terminal's open item: the sign-in check advises it before the terminal sends again.
+  answered       TINYINT(1) NOT NULL DEFAULT 0,
+  -- Outcome the sign-in check recovered for an open credit vend: the raw advice response, or
+  -- 'NOT_PROCESSED' for LastResponseEx. lastResponse() uses it instead of asking again.
+  recovered      MEDIUMTEXT NULL,
   created_at     DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   UNIQUE KEY uq_msgid (terminal_id, msg_datetime, msg_unique),
   KEY ix_sale (client_sale_id, operation),
   KEY ix_terminal (terminal_id, id)
 ) ENGINE=InnoDB;
+-- Upgrade of an existing install (columns added for the sign-in check).
+ALTER TABLE xmlvend_messages ADD COLUMN IF NOT EXISTS answered TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE xmlvend_messages ADD COLUMN IF NOT EXISTS recovered MEDIUMTEXT NULL;

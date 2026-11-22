@@ -12,10 +12,12 @@ declare(strict_types=1);
  *   lostfail    nothing issued, response never sent
  *   down        HTTP 503, no body
  *   kct         success with key change tokens (meter moved to a new key revision)
+ *   lostindet   response never sent, and an advice for it gets IndeterminateLastResponseEx
  *
  * Deliberately strict, like the most limited real servers: it keeps only the LAST response per
  * terminal, rejects duplicate msgIDs per client, and answers an advice for any other msgID with
- * LastResponseEx.
+ * LastResponseEx. Fault names for duplicates and indeterminate advice follow the regional (Eskom
+ * XMLVend 2.1 extensions 1.8) profile: DuplicateMsgIDEx and IndeterminateLastResponseEx.
  */
 
 /** @var PDO $db */
@@ -56,7 +58,7 @@ if ($req['client'] === '' || $req['terminal'] === '' || !preg_match('/^\d{14}$/'
 try {
     $db->prepare('INSERT INTO xv_msgs VALUES (?,?,?,?)')->execute([$req['client'], $req['terminal'], $req['dt'], $req['un']]);
 } catch (PDOException) {
-    xv_reply(500, xv_fault('XMLVendFaultEx', 'Duplicate message identifier', $hdr, null));
+    xv_reply(500, xv_fault('DuplicateMsgIDEx', 'Duplicate message identifier', $hdr, null));
 }
 
 hit($db, '/xmlvend/' . $op, 'start');
@@ -120,6 +122,10 @@ if ($op === 'creditVendReq') {
         case 'down':
             http_response_code(503);
             exit;
+        case 'lostindet':
+            $store('INDETERMINATE');
+            sleep(60);
+            exit;
         case 'lostfail':
             $db->prepare('DELETE FROM xv_last WHERE terminal = ?')->execute([$req['terminal']]);
             sleep(60);
@@ -142,6 +148,9 @@ if ($op === 'adviceReq') {
     $last = $st->fetch();
     if (!$last || $last['dt'] !== $want[0] || (int) $last['un'] !== $want[1]) {
         xv_reply(500, xv_fault('LastResponseEx', 'No response held for that request: it was not processed', $hdr, null));
+    }
+    if ($last['response'] === 'INDETERMINATE') {
+        xv_reply(500, xv_fault('IndeterminateLastResponseEx', 'The outcome of that request cannot be determined', $hdr, null));
     }
     $inner = new DOMDocument();
     $inner->loadXML($last['response']);

@@ -149,6 +149,17 @@ final class VendService
     // ------------------------------------------------------------------ worker-facing
 
     /** Submit the credit vend for a RESERVED sale. Called only by the queue worker. */
+    /**
+     * Run the provider's sign-in check (XMLVend: advise the terminal's open credit vend before it
+     * sends anything new). Workers call this at start; providers without one need nothing.
+     */
+    public function signIn(): void
+    {
+        if (method_exists($this->provider, 'signIn')) {
+            $this->provider->signIn();
+        }
+    }
+
     public function processVend(int $saleId): void
     {
         $sale = Db::tx($this->pdo, function () use ($saleId) {

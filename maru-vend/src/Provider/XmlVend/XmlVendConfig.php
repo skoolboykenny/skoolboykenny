@@ -19,7 +19,17 @@ final class XmlVendConfig
         public readonly ?string $clientKey = null,
         public readonly ?string $caFile = null,
         public readonly string $terminalPrefix = 'MV',
-    ) {}
+        // HTTP gzip (NRS 009-6-10 5.2.5) is optional and off by default: the reference message
+        // interceptor used for certification can only read uncompressed messages. Turn it on only
+        // once BPC confirms its server accepts it.
+        public readonly bool $gzip = false,
+    ) {
+        // The regional profile restricts clientID to EANDeviceID (Eskom extensions 5.1; test-suite
+        // rule 2.1.5): 13 digits. A wrong ID only fails at BPC, so refuse it at start-up instead.
+        if (!preg_match('/^\d{13}$/', $clientEan)) {
+            throw new \InvalidArgumentException('MV_XV_CLIENT_EAN must be the 13-digit EAN device ID BPC issued');
+        }
+    }
 
     public static function fromEnv(): self
     {
@@ -34,6 +44,7 @@ final class XmlVendConfig
             Config::env('MV_XV_CLIENT_KEY'),
             Config::env('MV_XV_CA_FILE'),
             (string) Config::env('MV_XV_TERMINAL_PREFIX', 'MV'),
+            in_array(strtolower((string) Config::env('MV_XV_GZIP', '0')), ['1', 'true', 'yes'], true),
         );
     }
 
