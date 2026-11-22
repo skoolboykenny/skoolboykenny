@@ -66,6 +66,10 @@ final class Worker
         } catch (\Throwable $e) {
             error_log("[worker {$this->workerId}] sign-in check: {$e->getMessage()} (it runs again before every send)");
         }
+        $released = $this->releaseOwnLocks();
+        if ($released > 0) {
+            error_log("[worker {$this->workerId}] restarted: released $released job lock(s) left by its previous run");
+        }
         while ($maxJobs === null || $done < $maxJobs) {
             if ($this->runOnce()) {
                 $done++;
@@ -78,6 +82,22 @@ final class Worker
             }
         }
         return $done;
+    }
+
+    /**
+     * Release job locks held under this worker's own ID. A worker ID is one process at a time
+     * (stable across restarts: --id, or the container's hostname), so a lock under it at start-up
+     * was left by its previous run, which crashed mid-job. Without this the job waits for the stale
+     * lock timeout (worker timeout + 30 s). Locks of other workers are never touched. Safe because
+     * the sale state machine decides what the job does next, and the sign-in check has already
+     * resolved this terminal's open credit vend.
+     */
+    public function releaseOwnLocks(): int
+    {
+        $st = $this->pdo->prepare('UPDATE queue_jobs SET locked_by = NULL, locked_at = NULL, next_run_at = LEAST(next_run_at, NOW(6))
+            WHERE done = 0 AND locked_by = ?');
+        $st->execute([$this->workerId]);
+        return $st->rowCount();
     }
 
     private function claim(): ?array

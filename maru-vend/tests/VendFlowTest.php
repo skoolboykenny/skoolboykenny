@@ -25,6 +25,20 @@ final class VendFlowTest extends TestCase
         $this->assertSame(125, (int) $fee); // 5% of P25.00
     }
 
+    public function testRestartedWorkerReleasesOnlyItsOwnStaleLocks(): void
+    {
+        $a = $this->posSale(1000);
+        $b = $this->posSale(1000);
+        // w1 crashed holding $a's job; w2 is alive and holds $b's.
+        $this->pdo->prepare("UPDATE queue_jobs SET locked_by = 'w1', locked_at = NOW(6) WHERE sale_id = ?")->execute([$a['id']]);
+        $this->pdo->prepare("UPDATE queue_jobs SET locked_by = 'w2', locked_at = NOW(6) WHERE sale_id = ?")->execute([$b['id']]);
+        $w1 = new \MaruVend\Queue\Worker($this->pdo, $this->app->settings, $this->vend, 'w1');
+        $this->assertSame(1, $w1->releaseOwnLocks());
+        $locks = $this->pdo->query('SELECT sale_id, locked_by FROM queue_jobs ORDER BY sale_id')->fetchAll(\PDO::FETCH_KEY_PAIR);
+        $this->assertNull($locks[$a['id']], 'own stale lock released at once');
+        $this->assertSame('w2', $locks[$b['id']], "another worker's lock untouched");
+    }
+
     public function testWebSaleWaitsForPaymentBeforeQueueing(): void
     {
         $s = $this->vend->quote($this->web, '94949494949', 3000, 'w1');

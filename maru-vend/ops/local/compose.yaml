@@ -63,11 +63,12 @@ services:
     command: php -S 0.0.0.0:8081 -t channels/public channels/public/index.php
     ports: ["127.0.0.1:8081:8081"]
 
-  # Queue workers: each container is its own XMLVend terminal (terminal ID from its hostname).
+  # Queue workers: each container is its own XMLVend terminal. The worker ID is the container's
+  # hostname, stable across restarts, so a restarted worker releases its own stale job locks.
   worker:
     <<: *app
     depends_on: { init: { condition: service_completed_successfully } }
-    command: php bin/mv worker
+    command: ["sh", "-c", "exec php bin/mv worker --id=$$(hostname)"]
     deploy: { replicas: 4 }
 
   sms:
