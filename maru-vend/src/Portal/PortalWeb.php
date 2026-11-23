@@ -41,6 +41,29 @@ final class PortalWeb
             });
         }
 
+        // Sign-in from the Maru Quick website (maru_power_login.php): redeem the ticket, start the session.
+        $slim->get('/power/sso', function (Request $req, Response $res) use ($session, $appFactory) {
+            $session();
+            $secret = Sso::secret();
+            /** @var App $app */
+            $app = $appFactory($req->getServerParams()['REMOTE_ADDR'] ?? null);
+            $uid = $secret ? Sso::redeem($app->pdo, $secret, (string) ($req->getQueryParams()['t'] ?? '')) : null;
+            if ($uid !== null) {
+                try {
+                    (new Portal($app))->me($uid); // the account must exist
+                } catch (VendException $e) {
+                    $uid = null;
+                }
+            }
+            $app->audit->record('portal:' . ($uid ?? '?'), 'customer', $uid ? 'portal.sso_login' : 'portal.sso_rejected', 'portal_users', $uid ? (string) $uid : null);
+            if ($uid === null) {
+                return $res->withHeader('Location', '/power#/login')->withStatus(302);
+            }
+            session_regenerate_id(true);
+            $_SESSION['mp_uid'] = $uid;
+            return $res->withHeader('Location', '/power#/')->withHeader('Referrer-Policy', 'no-referrer')->withStatus(302);
+        });
+
         $route = function (string $method, string $path, callable $fn, bool $auth = true) use ($slim, $json, $session, $appFactory) {
             $slim->map([$method], "/power/api$path", function (Request $req, Response $res, array $args) use ($fn, $auth, $json, $session, $appFactory, $method) {
                 $session();

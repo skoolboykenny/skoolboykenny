@@ -942,7 +942,7 @@ $mpUrl = rtrim(getenv('MARU_POWER_URL') ?: 'http://127.0.0.1:8080/power', '/');
 $mpE = function ($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); };
 $signupHome = $mpE($mpUrl . '#/login/signup-household');
 $signupBiz  = $mpE($mpUrl . '#/login/signup-business');
-$login      = $mpE($mpUrl . '#/login');
+$login      = 'maru_power_login.php'; // website login page; checks the Maru Quick database, then opens Maru Power
 ?>
 <style>
 #maru-power {

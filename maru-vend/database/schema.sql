@@ -345,3 +345,10 @@ ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS vat_no VARCHAR(40) NULL AFTER 
 
 -- Accounts can live in the Maru Quick website database, so meters no longer point at portal_users here.
 ALTER TABLE portal_meters DROP FOREIGN KEY IF EXISTS portal_meters_ibfk_1;
+
+-- Sign-in tickets from the Maru Quick website, recorded so each works only once (Portal/Sso.php).
+CREATE TABLE IF NOT EXISTS portal_sso_nonces (
+  nonce    CHAR(32) PRIMARY KEY,
+  user_id  BIGINT NOT NULL,
+  used_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB;
