@@ -3,9 +3,11 @@
 # Demo credentials only: never reuse these values outside this sample.
 name: maruvend-sample
 
+# Every app service runs the same image. Only `init` builds it (several services building one
+# image at once collide when it is saved); the others use it and never try to pull it.
 x-app: &app
-  build: { context: ../.., dockerfile: ops/local/Dockerfile }
   image: maruvend-sample
+  pull_policy: never
   environment: &env
     MV_DB_HOST: db
     MV_DB_PASS: devpass
@@ -39,12 +41,15 @@ services:
   sim:
     <<: *app
     environment: { <<: *env, PHP_CLI_SERVER_WORKERS: "16" }
+    depends_on: { init: { condition: service_started } }
     command: php -S 0.0.0.0:8099 simulator/index.php
     ports: ["127.0.0.1:8099:8099"]
 
   # One-off: schema, demo data, and the settings that route sales over XMLVend to the simulator.
   init:
     <<: *app
+    build: { context: ../.., dockerfile: ops/local/Dockerfile }
+    pull_policy: build
     restart: "no"
     depends_on: { db: { condition: service_healthy } }
     command: ops/local/init.sh
