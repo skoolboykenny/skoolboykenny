@@ -52,10 +52,10 @@ final class SaleState
         return match ($state) {
             self::QUOTED => 'Please confirm the name and meter number.',
             self::PAYMENT_PENDING => 'Waiting for payment.',
-            self::RESERVED, self::SUBMITTED => 'Buying your token from BPC...',
-            self::UNKNOWN, self::MANUAL_REVIEW => 'Confirming with BPC, do not pay again. Your token will be sent by SMS.',
+            self::RESERVED, self::SUBMITTED => 'Getting your token...',
+            self::UNKNOWN, self::MANUAL_REVIEW => 'Confirming your token, do not pay again. It will be sent by SMS.',
             self::SUCCEEDED => 'Token issued.',
-            self::FAILED => 'BPC could not issue a token. You have not been charged.',
+            self::FAILED => 'A token could not be issued. You have not been charged.',
             self::EXPIRED => 'This request expired. Please start again.',
             default => '',
         };

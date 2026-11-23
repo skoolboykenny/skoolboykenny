@@ -128,7 +128,7 @@
         ${stat('Spent this month', P(d.month_thebe), 'All meters, all channels', 'wallet', 'ic-green')}
         ${stat('Units this month', d.month_kwh + ' kWh', 'From issued tokens', 'bolt', 'ic-yellow')}
         ${stat('Meters', d.meters.length, d.meters.length ? groupsSummary(d.meters) : 'None linked yet', 'meter', 'ic-blue')}
-        ${stat('In progress', d.in_progress, d.in_progress ? 'Waiting for BPC' : 'Nothing pending', 'clock', 'ic-violet')}
+        ${stat('In progress', d.in_progress, d.in_progress ? 'Token being issued' : 'Nothing pending', 'clock', 'ic-violet')}
       </div>
       <section class="card"><div class="card-head"><h2>${ic.trend} Usage trends</h2><span class="muted small">kWh bought</span></div>
         <div class="chart" role="img" aria-label="kWh bought per month">${d.trend.map((m) => `
@@ -179,7 +179,7 @@
     const owner = m.role === 'owner';
     app.innerHTML = `
       <p><a href="#/meters" class="small">← My meters</a></p>
-      <h1>${esc(m.label)}</h1><p class="lead">Meter ${esc(m.meter_number)}${m.customer_name ? ' · BPC name: ' + esc(m.customer_name) : ''}</p>
+      <h1>${esc(m.label)}</h1><p class="lead">Meter ${esc(m.meter_number)}${m.customer_name ? ' · Name on meter: ' + esc(m.customer_name) : ''}</p>
       <div class="stats">
         ${stat('This month', P(m.month_thebe), m.month_kwh + ' kWh', 'wallet', 'ic-green')}
         ${stat('Purchases', m.purchases, 'All time, all channels', 'receipt', 'ic-blue')}
@@ -271,7 +271,7 @@
       const s = await api('POST', '/buy', { meter, amount: Number(d.amount), idempotency_key: crypto.randomUUID() });
       $('#f').hidden = true;
       $('#step').innerHTML = `<section class="card"><h2>Confirm and pay</h2>
-        <dl class="kv" style="margin-top:14px"><dt>BPC name</dt><dd>${esc(s.customer_name || '—')}</dd><dt>Meter</dt><dd>${esc(s.meter_number)}</dd><dt>Amount</dt><dd>P${esc(s.amount)}</dd></dl>
+        <dl class="kv" style="margin-top:14px"><dt>Name on meter</dt><dd>${esc(s.customer_name || '—')}</dd><dt>Meter</dt><dd>${esc(s.meter_number)}</dd><dt>Amount</dt><dd>P${esc(s.amount)}</dd></dl>
         <form id="pay"><label>Pay with</label><select name="method">${Object.entries(cfg.methods).map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join('')}</select>
           <div class="note err" hidden></div><button class="btn" type="submit">Pay P${esc(s.amount)}</button>
           <button class="btn secondary" type="button" id="cancel">Cancel</button></form></section>`;
@@ -302,7 +302,7 @@
         <li class="${c.ok ? 'ok' : ''}"><span class="dot">${c.ok ? ic.check : ic.clock}</span><div><div class="t">${esc(c.name)}</div><div class="d">${esc(c.detail)}</div></div></li>`).join('')}</ul></section>
       ${r ? `<section class="card"><h2>${ic.receipt} Receipt</h2><dl class="kv" style="margin-top:14px">
         ${[['Receipt number', r.receipt_no], ['Date', r.date], ['Meter', r.meter_number], ['Customer', r.customer_name], ['Tariff', r.tariff_index], ['Amount', 'P' + r.transaction_amount], ['Units', r.kwh + ' kWh'],
-          ['Cost of units', 'P' + r.cost_of_units], ['Fixed charge', 'P' + r.fixed_charge], ['Government levy', 'P' + r.government_levy], ['VAT', 'P' + r.vat], ['BPC VAT no.', r.bpc_vat_no]]
+          ['Cost of units', 'P' + r.cost_of_units], ['Fixed charge', 'P' + r.fixed_charge], ['Government levy', 'P' + r.government_levy], ['VAT', 'P' + r.vat], ['Supplier VAT no.', r.bpc_vat_no]]
           .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v ?? '—')}</dd>`).join('')}</dl></section>` : ''}
       <section class="card"><h2>History</h2><table style="margin-top:10px"><tbody>${d.timeline.map((e) => `<tr><td class="muted">${date(e.at)}</td><td>${esc(e.cause)}</td></tr>`).join('')}</tbody></table></section>`;
     $('#copy')?.addEventListener('click', () => navigator.clipboard?.writeText(r.token.replace(/\s/g, '')).then(() => toast('Token copied')));
@@ -351,8 +351,8 @@
   views.help = () => {
     app.innerHTML = `<h1>Help</h1><section class="card">
       <h2>How do my meters get onto my account?</h2><p class="muted">Use any purchase slip (receipt number and token), or verify the phone number your tokens are sent to. A teller can sell to your meter at any Maru till; that sale then appears here automatically.</p>
-      <h2>What does "Verified" mean?</h2><p class="muted">The payment was confirmed for the exact amount and used only once, the money was held for BPC, BPC issued the token, and the payment to BPC was recorded. Each step is listed on the transaction.</p>
-      <h2>A purchase failed</h2><p class="muted">If BPC does not issue a token, the amount is released and your payment is reversed. The transaction shows this.</p>
+      <h2>What does "Verified" mean?</h2><p class="muted">Your payment was confirmed for the exact amount and used only once, the amount was set aside for your purchase, your token was issued, and the purchase was completed and recorded. Each step is listed on the transaction.</p>
+      <h2>A purchase failed</h2><p class="muted">If a token cannot be issued, the amount is released and your payment is reversed. The transaction shows this.</p>
       <h2>Lost a token?</h2><p class="muted">Every token for your meters stays here. Open the transaction and copy it again.</p></section>`;
   };
 
@@ -363,7 +363,7 @@
     m.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="nt"><button class="icon-btn x" aria-label="Close">${ic.x}</button>
       <div class="bell">${ic.bell}</div><h2 id="nt" style="justify-content:center">Never miss a token</h2>
       <p class="muted">Maru Power can tell you when a token is bought for one of your meters, wherever it was bought.</p>
-      <ul><li>${ic.bolt} A new token for any of your meters</li><li>${ic.check} Payment verified and token issued</li><li>${ic.clock} A purchase waiting on BPC</li></ul>
+      <ul><li>${ic.bolt} A new token for any of your meters</li><li>${ic.check} Payment verified and token issued</li><li>${ic.clock} A purchase still being processed</li></ul>
       <button class="link" id="later">Maybe later</button><button class="btn" id="enable">Enable notifications</button></div>`;
     m.hidden = false;
     const close = () => { m.hidden = true; store.set('mp_notify_later', '1'); };

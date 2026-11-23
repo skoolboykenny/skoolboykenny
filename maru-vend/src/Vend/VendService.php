@@ -52,8 +52,8 @@ final class VendService
         $r = $this->provider->confirmCustomer($clientSaleId . 'Q', $meter, $amountThebe, $channel['type']);
         if (!$r->ok()) {
             throw match ($r->outcome) {
-                ProviderResult::BUSINESS_FAULT => new VendException('METER_REJECTED', $r->message ?: 'Meter could not be confirmed by BPC.'),
-                default => new VendException('BPC_UNAVAILABLE', 'BPC could not be reached. Please try again.', 503),
+                ProviderResult::BUSINESS_FAULT => new VendException('METER_REJECTED', $r->message ?: 'That meter could not be confirmed. Check the number and try again.'),
+                default => new VendException('BPC_UNAVAILABLE', 'Electricity sales are temporarily unavailable. Please try again shortly.', 503),
             };
         }
 
@@ -413,7 +413,7 @@ final class VendService
         $this->transition($sale, SaleState::SUCCEEDED, $cause, 'worker');
         $this->finishJobs((int) $sale['id']);
         $kct = array_filter([$d['keyChange1'] ?? null, $d['keyChange2'] ?? null]);
-        $this->sms($sale, sprintf('BPC electricity token for meter %s: %s. %s kWh, P%.2f. Receipt %s.%s Maru Quick',
+        $this->sms($sale, sprintf('Electricity token for meter %s: %s. %s kWh, P%.2f. Receipt %s.%s Maru Quick',
             $sale['meter_number'], trim(chunk_split((string) $d['token'], 4, ' ')), number_format((float) ($d['kwh'] ?? 0), 1),
             $sale['amount_thebe'] / 100, $sale['receipt_no'],
             $kct ? ' Enter key change tokens first: ' . implode(' then ', array_map(fn ($t) => trim(chunk_split($t, 4, ' ')), $kct)) . '.' : ''));

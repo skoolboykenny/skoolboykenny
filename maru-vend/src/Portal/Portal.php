@@ -341,9 +341,10 @@ final class Portal
     /**
      * One transaction with its receipt and the evidence trail:
      *   1. payment received (cash at a till against the outlet's float, or a verified provider payment),
-     *   2. amount held against the BPC float,
-     *   3. token issued by BPC,
-     *   4. settled to BPC (or released / reversed if no token).
+     *   2. amount set aside for the purchase (float reserve),
+     *   3. token issued,
+     *   4. purchase completed (or released / reversed if no token).
+     * Wording is customer-facing: it does not name the utility or internal systems.
      */
     public function transaction(int $uid, int $saleId): array
     {
@@ -365,19 +366,35 @@ final class Portal
                 'detail' => $verified ? sprintf('%s confirmed payment ref %s for P%.2f, matching the sale amount.', self::providerName($verified['provider']), $verified['payment_ref'], $verified['amount_thebe'] / 100)
                     : ($pay ? 'Payment rejected: ' . $pay[0]['reason'] : 'Waiting for the payment provider to confirm.')];
         }
-        $checks[] = ['name' => 'Funds held for BPC', 'ok' => (bool) $has('reserve'), 'detail' => $has('reserve') ? 'Amount reserved against the BPC float at ' . substr($has('reserve')['created_at'], 0, 19) : 'Not yet reserved.'];
-        $checks[] = ['name' => 'Token issued by BPC', 'ok' => !empty($s['token']), 'detail' => $s['token'] ? 'BPC reference ' . ($s['provider_ref'] ?: '—') . ', issued ' . substr((string) $s['issued_at'], 0, 19) : $s['message']];
+        $checks[] = ['name' => 'Amount set aside', 'ok' => (bool) $has('reserve'), 'detail' => $has('reserve') ? 'The amount was set aside for your purchase at ' . substr($has('reserve')['created_at'], 0, 19) : 'Not yet set aside.'];
+        $checks[] = ['name' => 'Token issued', 'ok' => !empty($s['token']), 'detail' => $s['token'] ? 'Reference ' . ($s['provider_ref'] ?: '—') . ', issued ' . substr((string) $s['issued_at'], 0, 19) : $s['message']];
         $settled = $has('settle');
         $released = $has('release') ?? $has('refund');
-        $checks[] = ['name' => 'Settled to BPC', 'ok' => (bool) $settled,
-            'detail' => $settled ? 'Payment to BPC recorded in the float ledger.' : ($released ? 'No token was issued, so the amount was released and the payment reversed.' : 'Pending.')];
+        $checks[] = ['name' => 'Purchase completed', 'ok' => (bool) $settled,
+            'detail' => $settled ? 'The purchase was completed and recorded.' : ($released ? 'No token was issued, so the amount was released and the payment reversed.' : 'Pending.')];
 
         return [
             'sale' => \MaruVend\Api\ApiApp::view($s, $this->app) + ['channel' => $ch['type'], 'outlet' => $ch['name'], 'created_at' => $s['created_at']],
             'verified' => !in_array(false, array_column($checks, 'ok'), true),
             'checks' => $checks,
-            'timeline' => $events,
+            'timeline' => array_map(fn ($e) => ['at' => $e['at'], 'to_state' => $e['to_state'], 'cause' => self::customerStep($e['to_state'])], $events),
         ];
+    }
+
+    /** Customer wording for each step of a sale (internal records keep the technical cause). */
+    public static function customerStep(string $state): string
+    {
+        return match ($state) {
+            SaleState::QUOTED => 'Meter details confirmed',
+            SaleState::PAYMENT_PENDING => 'Waiting for payment',
+            SaleState::RESERVED => 'Payment confirmed; amount set aside',
+            SaleState::SUBMITTED => 'Token requested',
+            SaleState::SUCCEEDED => 'Token issued',
+            SaleState::UNKNOWN, SaleState::MANUAL_REVIEW => 'Confirming the token, do not pay again',
+            SaleState::FAILED => 'No token issued; payment reversed',
+            SaleState::EXPIRED => 'Request expired',
+            default => 'Updated',
+        };
     }
 
     public static function providerName(string $p): string
