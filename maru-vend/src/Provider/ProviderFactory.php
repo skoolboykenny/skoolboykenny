@@ -19,6 +19,8 @@ final class ProviderFactory
     {
         return match ($settings->get('provider')) {
             // The simulator speaks the aggregator REST API; credentials are dummies.
+            // Built-in test tokens, no outside connection (hosting before a token source is contracted).
+            'test' => new TestProvider(),
             'simulator' => new RestVendProvider($settings, 'sim-key', 'sim-pass', 'MARU-SIM', 'maru-vend', 'simulator'),
             'aggregator' => new RestVendProvider(
                 $settings,

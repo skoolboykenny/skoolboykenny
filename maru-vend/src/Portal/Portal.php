@@ -182,6 +182,46 @@ final class Portal
      * Link a meter using a purchase slip: receipt number + the full 20-digit token printed on it.
      * The teller's till, USSD or web store sale is the proof that this customer holds the meter.
      */
+    /**
+     * Add a meter by its number: checked with the token source, which returns the name on the meter.
+     * Step 1 (confirm=false) returns that name for the customer to check; step 2 (confirm=true) adds it.
+     * A meter that already has an owner cannot be added this way: the owner shares it instead.
+     * Limited to 10 checks an hour per account.
+     */
+    public function addByNumber(int $uid, string $meter, bool $confirm, string $label = '', string $siteType = 'home'): array
+    {
+        $meter = preg_replace('/\D/', '', $meter);
+        if (!preg_match('/^\d{11}$|^\d{13}$/', $meter)) {
+            throw new VendException('BAD_METER', 'Meter numbers are 11 or 13 digits.');
+        }
+        if ($this->one('SELECT 1 FROM portal_meters WHERE user_id = ? AND meter_number = ?', [$uid, $meter])) {
+            throw new VendException('EXISTS', 'This meter is already on your account.', 409);
+        }
+        if ($this->one("SELECT 1 FROM portal_meters WHERE meter_number = ? AND role = 'owner'", [$meter])) {
+            throw new VendException('METER_OWNED', 'This meter is already managed by another Maru Power account. Ask its owner to share it with you, or contact support if you have moved in.', 409);
+        }
+        $recent = $this->one("SELECT COUNT(*) n FROM audit_log WHERE actor = ? AND action = 'portal.meter_checked' AND created_at > NOW(6) - INTERVAL 1 HOUR", ["portal:$uid"]);
+        if ((int) $recent['n'] >= 10) {
+            throw new VendException('RATE_LIMIT', 'Too many meter checks. Try again in an hour.', 429);
+        }
+        $this->app->audit->record("portal:$uid", 'customer', 'portal.meter_checked', 'portal_meters', $meter);
+        $r = $this->app->provider()->confirmCustomer('CHK' . bin2hex(random_bytes(8)), $meter, 1000, 'portal');
+        if (!$r->ok()) {
+            throw $r->outcome === \MaruVend\Provider\ProviderResult::BUSINESS_FAULT
+                ? new VendException('METER_REJECTED', 'That meter could not be found. Check the number and try again.')
+                : new VendException('UNAVAILABLE', 'Meters cannot be checked right now. Please try again shortly.', 503);
+        }
+        $name = (string) ($r->data['customerName'] ?? '');
+        if (!$confirm) {
+            return ['meter_number' => $meter, 'customer_name' => $name];
+        }
+        $res = Db::tx($this->pdo(), fn () => $this->link($uid, $meter, 'number', null, $name, $label, $siteType));
+        if ($res === 'taken') {
+            throw new VendException('METER_OWNED', 'This meter is already managed by another Maru Power account.', 409);
+        }
+        return $this->meter($uid, $meter);
+    }
+
     public function claimByReceipt(int $uid, string $receiptNo, string $token, string $label = '', string $siteType = 'home'): array
     {
         $recent = $this->one("SELECT COUNT(*) n FROM audit_log WHERE actor = ? AND action = 'portal.claim_failed' AND created_at > NOW(6) - INTERVAL 1 HOUR", ["portal:$uid"]);
@@ -203,7 +243,7 @@ final class Portal
     }
 
     /** @return bool|string true = linked, false = already linked to this user, 'taken' = another owner */
-    private function link(int $uid, string $meter, string $how, string $proof, ?string $customerName, string $label = '', string $siteType = 'home'): bool|string
+    private function link(int $uid, string $meter, string $how, ?string $proof, ?string $customerName, string $label = '', string $siteType = 'home'): bool|string
     {
         if ($this->one('SELECT id FROM portal_meters WHERE user_id = ? AND meter_number = ?', [$uid, $meter])) {
             return false;

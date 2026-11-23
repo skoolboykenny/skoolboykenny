@@ -140,7 +140,7 @@
       <section class="card"><div class="card-head"><h2>${ic.meter} My meters</h2><a class="btn secondary sm" href="#/link">+ Add</a></div>
         ${d.meters.length ? meterGroups(d.meters) : empty('meter', 'No meters added yet', '<a href="#/link">Add your first meter</a>')}</section>
       <section class="card"><h2>${ic.bulb} Quick actions</h2>
-        ${qa('ic-blue', 'receipt', 'Link a meter with a till slip', 'Use the receipt number and token from any purchase to add that meter.', '#/link', 'Link meter')}
+        ${qa('ic-blue', 'receipt', 'Add a meter', 'Add your meter with its number, or with a slip from any purchase.', '#/link', 'Add meter')}
         ${me.msisdn ? '' : qa('ic-violet', 'phone', 'Verify your phone number', 'We will add every meter whose tokens were sent to your phone by SMS.', '#/profile', 'Verify phone')}
         ${qa('ic-green', 'bolt', 'Buy electricity', 'Buy a token for any of your meters. It is checked and recorded like every other sale.', '#/buy', 'Buy now')}
         ${qa('ic-yellow', 'wallet', 'What do my appliances cost?', 'Estimate the monthly cost of your geyser, stove and more.', '#/calculator', 'Open calculator')}
@@ -211,9 +211,21 @@
   };
 
   views.link = () => {
-    app.innerHTML = `<h1>Link a meter</h1><p class="lead">Bought electricity at a till, on USSD or online? The slip proves the meter is yours.</p>
+    app.innerHTML = `<h1>Add a meter</h1><p class="lead">Add the prepaid meters at your home or business to your account.</p>
+      <form class="card" id="byNum" novalidate>
+        <h2>${ic.meter} With your meter number</h2>
+        <label for="mn">Meter number <small>11 or 13 digits, on the front of your meter</small></label>
+        <input id="mn" name="meter" inputmode="numeric" autocomplete="off" maxlength="17" required placeholder="e.g. 04040404040">
+        <div id="mnConfirm" hidden>
+          <p class="note ok" id="mnName"></p>
+          <label for="mlb">Name this meter <small>optional</small></label><input id="mlb" name="label" maxlength="60" placeholder="e.g. Home, Tuck shop">
+          <label for="mst">Type</label><select id="mst" name="site_type"><option value="home">Home</option><option value="business">Business</option><option value="other">Other</option></select>
+        </div>
+        <div class="note err" role="alert" hidden></div>
+        <button class="btn" type="submit" id="mnBtn">Check meter</button>
+      </form>
       <form class="card" id="f" novalidate>
-        <h2>${ic.receipt} With a purchase slip</h2>
+        <h2>${ic.receipt} Or with a purchase slip</h2>
         <label for="rn">Receipt number</label><input id="rn" name="receipt_no" autocomplete="off" required placeholder="e.g. MV0000001234">
         <label for="tk">Token <small>all 20 digits</small></label><input id="tk" name="token" inputmode="numeric" autocomplete="off" required placeholder="1234 5678 9012 3456 7890">
         <label for="lb">Name this meter <small>optional</small></label><input id="lb" name="label" maxlength="60" placeholder="e.g. Home, Tuck shop">
@@ -226,6 +238,19 @@
         <a class="btn secondary" href="#/profile">${me?.msisdn ? 'Phone verified: ' + esc(me.msisdn) : 'Verify my phone'}</a></section>
       <p class="muted small">Someone else manages the meter? Ask them to add you from the meter's page.</p>`;
     form($('#f'), async (d) => { const m = await api('POST', '/meters/claim', d); toast('Meter linked'); go('#/meter/' + m.meter_number); });
+    let checked = '';
+    $('#mn').addEventListener('input', () => { if (checked) { checked = ''; $('#mnConfirm').hidden = true; $('#mnBtn').textContent = 'Check meter'; } });
+    form($('#byNum'), async (d) => {
+      if (!checked) {
+        const r = await api('POST', '/meters/add', { meter: d.meter, confirm: false });
+        checked = r.meter_number;
+        $('#mnName').textContent = `Meter ${r.meter_number} is registered to: ${r.customer_name || 'name not available'}. Is this your meter?`;
+        $('#mnConfirm').hidden = false; $('#mnBtn').textContent = 'Yes, add this meter';
+        return;
+      }
+      const m = await api('POST', '/meters/add', { meter: checked, confirm: true, label: d.label, site_type: d.site_type });
+      toast('Meter added'); go('#/meter/' + m.meter_number);
+    });
   };
 
   views.profile = async () => {

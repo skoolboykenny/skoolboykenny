@@ -105,6 +105,7 @@ final class PortalWeb
         $route('POST', '/phone/verify', fn (Portal $p, $u, $b) => $p->verifyPhone($u, $s($b, 'code')));
 
         $route('GET', '/meters', fn (Portal $p, $u) => $p->meters($u));
+        $route('POST', '/meters/add', fn (Portal $p, $u, $b) => $p->addByNumber($u, $s($b, 'meter'), !empty($b['confirm']), $s($b, 'label'), $s($b, 'site_type') ?: 'home'));
         $route('POST', '/meters/claim', fn (Portal $p, $u, $b) => $p->claimByReceipt($u, $s($b, 'receipt_no'), $s($b, 'token'), $s($b, 'label'), $s($b, 'site_type') ?: 'home'));
         $route('GET', '/meters/{m:\d{11,13}}', fn (Portal $p, $u, $b, $a) => $p->meter($u, $a['m']));
         $route('PUT', '/meters/{m:\d{11,13}}', fn (Portal $p, $u, $b, $a) => $p->updateMeter($u, $a['m'], $b));

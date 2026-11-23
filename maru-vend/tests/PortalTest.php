@@ -148,6 +148,21 @@ final class PortalTest extends TestCase
         $this->expectCode('BAD_REQUEST', fn () => $this->portal->signup('X', 'x2@example.com', 'secret123', 'wholesale'));
     }
 
+    public function testAddMeterByNumberChecksNameThenAddsAndProtectsOwnedMeters(): void
+    {
+        $a = $this->portal->signup('A', 'a1@example.com', 'secret123');
+        $b = $this->portal->signup('B', 'b1@example.com', 'secret123');
+        $check = $this->portal->addByNumber($a, '9494 9494 949', false);
+        $this->assertSame(['meter_number' => '94949494949', 'customer_name' => 'Test Customer'], $check);
+        $this->assertSame([], $this->portal->meters($a), 'nothing added before confirming');
+        $m = $this->portal->addByNumber($a, '94949494949', true, 'Home');
+        $this->assertSame(['owner', 'Home'], [$m['role'], $m['label']]);
+        $this->expectCode('EXISTS', fn () => $this->portal->addByNumber($a, '94949494949', false));
+        $this->expectCode('METER_OWNED', fn () => $this->portal->addByNumber($b, '94949494949', true));
+        $this->expectCode('METER_REJECTED', fn () => $this->portal->addByNumber($b, '07070707070', false));
+        $this->expectCode('BAD_METER', fn () => $this->portal->addByNumber($b, '123', false));
+    }
+
     public function testSignedProviderCallback(): void
     {
         putenv('MV_PAY_SECRET_FNB=shh');
