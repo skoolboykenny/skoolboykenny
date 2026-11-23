@@ -18,4 +18,15 @@ $slim = ApiApp::create($factory);
 $slim->setBasePath(rtrim((string) getenv('MV_BASE_PATH'), '/'));
 Dashboard::register($slim, $factory);
 PortalWeb::register($slim, $factory);
+// Unknown addresses get a plain "Not found"; errors never show code or file paths to visitors.
+$errors = $slim->addErrorMiddleware(false, true, false);
+$errors->setDefaultErrorHandler(function (\Psr\Http\Message\ServerRequestInterface $req, \Throwable $e) use ($slim) {
+    $notFound = $e instanceof \Slim\Exception\HttpNotFoundException || $e instanceof \Slim\Exception\HttpMethodNotAllowedException;
+    if (!$notFound) {
+        error_log('[maru-vend] ' . $e);
+    }
+    $res = $slim->getResponseFactory()->createResponse($notFound ? 404 : 500);
+    $res->getBody()->write($notFound ? 'Not found' : 'Something went wrong. Please try again.');
+    return $res->withHeader('Content-Type', 'text/plain; charset=utf-8');
+});
 $slim->run();
