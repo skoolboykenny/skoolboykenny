@@ -336,3 +336,9 @@ CREATE TABLE IF NOT EXISTS payments (
 ) ENGINE=InnoDB;
 
 ALTER TABLE vend_sales ADD COLUMN IF NOT EXISTS portal_user_id BIGINT NULL AFTER msisdn;
+
+-- Maru Power account types: households, and businesses (one company, many sites and meters).
+ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS account_type ENUM('household','business') NOT NULL DEFAULT 'household' AFTER name;
+ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS company_name VARCHAR(160) NULL AFTER account_type;
+ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS company_reg VARCHAR(40) NULL AFTER company_name;   -- CIPA UIN
+ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS vat_no VARCHAR(40) NULL AFTER company_reg;         -- BURS VAT number, optional

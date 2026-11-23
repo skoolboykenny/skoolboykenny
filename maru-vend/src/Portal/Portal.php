@@ -49,9 +49,31 @@ final class Portal
 
     // ------------------------------------------------------------------ accounts
 
-    public function signup(string $name, string $email, string $password): int
+    /**
+     * Create a Maru Power account.
+     * Household: one person and their home(s). Business: a company with sites and meters; needs the
+     * company name and CIPA registration number (UIN), and may give a BURS VAT number.
+     */
+    public function signup(string $name, string $email, string $password, string $type = 'household', array $business = []): int
     {
         $name = trim($name);
+        if (!in_array($type, ['household', 'business'], true)) {
+            throw new VendException('BAD_REQUEST', 'Choose a household or business account.');
+        }
+        $company = mb_substr(trim((string) ($business['company_name'] ?? '')), 0, 160);
+        $reg = strtoupper(preg_replace('/\s+/', '', (string) ($business['company_reg'] ?? '')));
+        $vat = strtoupper(preg_replace('/\s+/', '', (string) ($business['vat_no'] ?? '')));
+        if ($type === 'business') {
+            if ($company === '') {
+                throw new VendException('BAD_REQUEST', 'Enter the registered company name.');
+            }
+            if (!preg_match('/^[A-Z0-9\/-]{4,40}$/', $reg)) {
+                throw new VendException('BAD_REQUEST', 'Enter the company registration number (CIPA UIN).');
+            }
+            if ($vat !== '' && !preg_match('/^[A-Z0-9\/-]{4,40}$/', $vat)) {
+                throw new VendException('BAD_REQUEST', 'That VAT number does not look right.');
+            }
+        }
         $email = strtolower(trim($email));
         if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new VendException('BAD_REQUEST', 'Enter your name and a valid email address.');
@@ -62,10 +84,11 @@ final class Portal
         if ($this->one('SELECT id FROM portal_users WHERE email = ?', [$email])) {
             throw new VendException('EXISTS', 'An account with this email already exists.', 409);
         }
-        $this->pdo()->prepare('INSERT INTO portal_users (name, email, password_hash) VALUES (?,?,?)')
-            ->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT)]);
+        $this->pdo()->prepare('INSERT INTO portal_users (name, account_type, company_name, company_reg, vat_no, email, password_hash) VALUES (?,?,?,?,?,?,?)')
+            ->execute([$name, $type, $type === 'business' ? $company : null, $type === 'business' ? $reg : null,
+                $type === 'business' && $vat !== '' ? $vat : null, $email, password_hash($password, PASSWORD_DEFAULT)]);
         $id = (int) $this->pdo()->lastInsertId();
-        $this->app->audit->record("portal:$id", 'customer', 'portal.signup', 'portal_users', (string) $id);
+        $this->app->audit->record("portal:$id", 'customer', 'portal.signup', 'portal_users', (string) $id, null, $type);
         return $id;
     }
 
@@ -83,7 +106,7 @@ final class Portal
 
     public function me(int $uid): array
     {
-        $u = $this->one('SELECT id, name, email, msisdn, created_at FROM portal_users WHERE id = ?', [$uid]);
+        $u = $this->one('SELECT id, name, account_type, company_name, company_reg, vat_no, email, msisdn, created_at FROM portal_users WHERE id = ?', [$uid]);
         if (!$u) {
             throw new VendException('UNAUTHORISED', 'Please sign in.', 401);
         }

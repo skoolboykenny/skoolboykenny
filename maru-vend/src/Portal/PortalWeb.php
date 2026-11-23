@@ -72,7 +72,8 @@ final class PortalWeb
         };
         $s = fn (array $b, string $k) => (string) ($b[$k] ?? '');
 
-        $route('POST', '/signup', fn (Portal $p, $u, $b) => $start($p->signup($s($b, 'name'), $s($b, 'email'), $s($b, 'password'))), false);
+        $route('POST', '/signup', fn (Portal $p, $u, $b) => $start($p->signup($s($b, 'name'), $s($b, 'email'), $s($b, 'password'),
+            $s($b, 'account_type') ?: 'household', ['company_name' => $s($b, 'company_name'), 'company_reg' => $s($b, 'company_reg'), 'vat_no' => $s($b, 'vat_no')])), false);
         $route('POST', '/login', fn (Portal $p, $u, $b) => $start($p->login($s($b, 'email'), $s($b, 'password'))), false);
         $route('POST', '/logout', function () { $_SESSION = []; session_destroy(); return ['ok' => true]; }, false);
         $route('GET', '/me', fn (Portal $p, $u) => $p->me($u));

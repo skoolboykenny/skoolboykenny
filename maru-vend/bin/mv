@@ -228,10 +228,11 @@ switch ($cmd) {
         break;
 
     case 'portal:user':
-        // bin/mv portal:user <email> "<full name>"  Maru Power customer account (password from MV_NEW_PASSWORD or generated)
+        // bin/mv portal:user <email> "<full name>" [--business="Company name" --reg=UIN]  (password from MV_NEW_PASSWORD or generated)
         $app = App::boot();
         $pw = getenv('MV_NEW_PASSWORD') ?: bin2hex(random_bytes(6));
-        $id = (new \MaruVend\Portal\Portal($app))->signup($args[1] ?? 'Customer', $args[0], $pw);
+        $id = (new \MaruVend\Portal\Portal($app))->signup($args[1] ?? 'Customer', $args[0], $pw,
+            $opt('business', null) ? 'business' : 'household', ['company_name' => (string) $opt('business', ''), 'company_reg' => (string) $opt('reg', '')]);
         echo "Maru Power account $args[0] created (id $id).\nPassword: $pw\n";
         break;
 
