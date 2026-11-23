@@ -286,7 +286,7 @@
   // ---------------------------------------------------------------- appliance calculator
   const APPLIANCES = {
     'Heating & Cooling': [['🌀', 'Ceiling fan', 75, 8], ['❄️', 'Air conditioner', 1500, 6], ['🔥', 'Heater (2 bar)', 2000, 3]],
-    Kitchen: [['🍳', 'Stove (4 plate)', 3000, 1.5], ['🧊', 'Fridge', 150, 24 * 0.4], ['♨️', 'Microwave', 1000, 0.3], ['☕', 'Kettle', 2000, 0.3]],
+    Kitchen: [['🍳', 'Stove (4 plate)', 3000, 1.5], ['🧊', 'Fridge', 150, 10], ['♨️', 'Microwave', 1000, 0.3], ['☕', 'Kettle', 2000, 0.3]],
     Laundry: [['🧺', 'Washing machine', 500, 1], ['👕', 'Iron', 1200, 0.5]],
     Entertainment: [['📺', 'TV', 100, 5], ['📡', 'Decoder', 20, 8], ['🎮', 'Game console', 150, 2]],
     Lighting: [['💡', 'LED bulbs (×6)', 60, 6], ['🔆', 'Security light', 50, 11]],
