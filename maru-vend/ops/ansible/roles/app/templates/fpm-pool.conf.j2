@@ -1,0 +1,20 @@
+[maruvend]
+user = maruvend
+group = maruvend
+listen = /run/php/maruvend.sock
+listen.owner = www-data
+listen.group = www-data
+pm = dynamic
+pm.max_children = 40
+pm.start_servers = 8
+pm.min_spare_servers = 4
+pm.max_spare_servers = 12
+request_terminate_timeout = {{ 150 + 30 }}s
+clear_env = no
+php_admin_value[expose_php] = Off
+php_admin_value[session.cookie_secure] = 1
+php_admin_value[session.cookie_httponly] = 1
+php_admin_value[date.timezone] = Africa/Gaborone
+php_admin_value[error_log] = /var/log/maruvend/php-error.log
+php_admin_flag[log_errors] = on
+php_admin_flag[display_errors] = off

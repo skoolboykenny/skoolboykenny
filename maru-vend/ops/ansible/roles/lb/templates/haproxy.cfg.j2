@@ -1,0 +1,69 @@
+# Managed by Ansible (role lb)
+global
+    log /dev/log local0
+    maxconn 20000
+    user haproxy
+    group haproxy
+    daemon
+    ssl-default-bind-ciphersuites TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256
+    ssl-default-bind-ciphers ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256
+    ssl-default-bind-options ssl-min-ver TLSv1.2 no-tls-tickets
+
+defaults
+    log global
+    timeout connect 5s
+    timeout client 60s
+    timeout server 200s
+    retries 2
+
+frontend https
+    mode http
+    option httplog
+    bind :80
+    bind :443 ssl crt /etc/haproxy/maruvend.pem alpn h2,http/1.1
+    http-request redirect scheme https code 301 unless { ssl_fc }
+    http-response set-header Strict-Transport-Security "max-age=31536000"
+    http-request set-header X-Forwarded-Proto https
+    option forwardfor
+    # Per-client request rate limit (abuse protection for public pages and the USSD callback)
+    stick-table type ip size 200k expire 60s store http_req_rate(10s)
+    http-request track-sc0 src
+    http-request deny deny_status 429 if { sc_http_req_rate(0) gt 100 }
+    use_backend channels if { hdr(host) -i {{ mv_domain_store }} }
+    default_backend core
+
+backend core
+    mode http
+    balance roundrobin
+    option httpchk GET /health
+    http-check expect status 200
+{% for h in groups['app'] if hostvars[h].mv_site == mv_site %}
+    server {{ h }} {{ hostvars[h].ansible_host }}:8080 check inter 3s fall 2 rise 2
+{% endfor %}
+
+backend channels
+    mode http
+    balance roundrobin
+    cookie MVSRV insert indirect nocache secure httponly
+    option httpchk GET /api/config
+    http-check expect status 200
+{% for h in groups['app'] if hostvars[h].mv_site == mv_site %}
+    server {{ h }} {{ hostvars[h].ansible_host }}:8081 check inter 3s fall 2 rise 2 cookie {{ h }}
+{% endfor %}
+
+# Application database connections: only the writable primary answers 200 on :9200.
+listen mariadb_primary
+    mode tcp
+    bind :3307
+    option httpchk
+    http-check expect status 200
+    default-server inter 2s fall 2 rise 2 on-marked-down shutdown-sessions
+{% for h in groups['db'] %}
+    server {{ h }} {{ hostvars[h].ansible_host }}:{{ db_port }} check port 9200
+{% endfor %}
+
+listen stats
+    mode http
+    bind 127.0.0.1:8404
+    stats enable
+    stats uri /

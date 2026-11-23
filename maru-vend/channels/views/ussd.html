@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>USSD Emulator · Maru Quick</title>
+<link rel="icon" href="/assets/icon-192.png">
+<link rel="stylesheet" href="/assets/maru.css">
+<link rel="stylesheet" href="/assets/ussd.css">
+</head>
+<body>
+<div class="banner">TEST ENVIRONMENT: USSD phone emulator. On a real phone the customer dials the Maru Quick short code.</div>
+<header class="top">
+  <img src="/assets/logo.png" alt="Maru Quick">
+  <div><div class="t">USSD channel</div><div class="s">Basic phones · 24 hours</div></div>
+</header>
+<main class="wide">
+  <div class="layout">
+    <div class="phone" aria-label="Basic phone">
+      <div class="speaker"></div>
+      <div class="screen">
+        <div class="status"><span>Mascom</span><span id="clock"></span></div>
+        <pre id="display" aria-live="polite">Dial *XXX# to buy electricity.</pre>
+        <form id="replyForm" hidden><input id="reply" inputmode="numeric" autocomplete="off" aria-label="Reply"><button>Send</button></form>
+      </div>
+      <div class="keys">
+        <button id="dialBtn" class="call">Dial *XXX#</button>
+        <button id="endBtn" class="end">End</button>
+      </div>
+      <label class="num">Phone number <input id="msisdn" value="71234567" inputmode="tel"></label>
+    </div>
+    <div class="inbox">
+      <h2>SMS inbox</h2>
+      <p class="muted">Messages Maru Quick sends to this number.</p>
+      <div id="sms"><p class="muted">No messages yet.</p></div>
+      <h2>Raw USSD exchange</h2>
+      <div class="tw"><table><thead><tr><th>Sent text</th><th>Reply</th></tr></thead><tbody id="log"></tbody></table></div>
+    </div>
+  </div>
+</main>
+<script src="/assets/ussd.js"></script>
+</body>
+</html>
