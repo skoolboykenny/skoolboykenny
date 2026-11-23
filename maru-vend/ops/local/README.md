@@ -23,6 +23,7 @@ The first build takes a few minutes. `init` creates the schema and the demo data
 | Merchant POS (operator `till1`, PIN `1234`) | http://127.0.0.1:8081/pos |
 | USSD emulator | http://127.0.0.1:8081/ussd-phone |
 | BPC dashboard (`bpc.viewer` / `bpc-demo-pass`, TOTP secret printed by `init`) | http://127.0.0.1:8080/bpc |
+| Maru Power (customer portal, `demo@marupower.test` / `maru1234`) | http://127.0.0.1:8080/power |
 | Core API | http://127.0.0.1:8080/v1 |
 | BPC simulator (XMLVend SOAP at `/xmlvend`) | http://127.0.0.1:8099 |
 

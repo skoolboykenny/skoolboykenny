@@ -12,6 +12,8 @@ x-app: &app
     MV_DB_HOST: db
     MV_DB_PASS: devpass
     MV_DEMO: "1"
+    MV_NEW_PASSWORD: maru1234          # demo Maru Power login created by init.sh
+    MV_SSO_SECRET: local-demo-sso-secret-change-me-0123456789   # must match MQ_POWER_SSO_SECRET on the website
     MV_CORE_URL: http://api:8080
     MV_SMS_PROVIDER: log
     MV_SMS_LOG: /tmp/sms.log
