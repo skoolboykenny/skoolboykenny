@@ -6,6 +6,9 @@
 param(
     [string]$DbPass = $env:MV_DB_PASS,
     [string]$DbRootPass = "",
+    [int]$ApiPort = 8080,
+    [int]$ChannelsPort = 8081,
+    [int]$SimPort = 8099,
     [switch]$Reset,
     [switch]$Stop
 )
@@ -31,7 +34,16 @@ foreach ($m in "pdo_mysql", "pdo_sqlite", "curl", "mbstring") {
     if ($mods -notmatch $m) { throw "PHP extension '$m' is off. Enable it in php.ini (extension=$m)." }
 }
 
+foreach ($port in $ApiPort, $ChannelsPort, $SimPort) {
+    $busy = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+    if ($busy) {
+        $owner = (Get-Process -Id $busy[0].OwningProcess -ErrorAction SilentlyContinue).ProcessName
+        throw "Port $port is already used by '$owner' (Docker or another server). Stop it, or pick other ports, e.g. -ApiPort 9080 -ChannelsPort 9081 -SimPort 9099"
+    }
+}
+
 $env:MV_DB_PASS = $DbPass
+$env:MV_CORE_URL = "http://127.0.0.1:$ApiPort"
 $env:MV_DEMO = "1"
 
 if ($Reset) {
@@ -55,6 +67,7 @@ if ($Reset) {
     $env:MV_NEW_PASSWORD = "admin2-pass"; php bin/mv user:add admin2 admin | Out-Null
     Remove-Item Env:MV_NEW_PASSWORD
 }
+php bin/mv setting:set bpc_endpoint "http://127.0.0.1:$SimPort" | Out-Null
 
 $logs = Join-Path $env:TEMP "maruvend-logs"
 New-Item -ItemType Directory -Force $logs | Out-Null
@@ -64,9 +77,9 @@ function Start-Bg([string]$name, [string[]]$phpArgs) {
         -RedirectStandardOutput "$logs\$name.log" -RedirectStandardError "$logs\$name.err.log"
     $script:procs += $p.Id
 }
-Start-Bg "sim"      @("-S", "127.0.0.1:8099", "simulator/index.php")
-Start-Bg "api"      @("-S", "127.0.0.1:8080", "-t", "public", "public/index.php")
-Start-Bg "channels" @("-S", "127.0.0.1:8081", "-t", "channels/public", "channels/public/index.php")
+Start-Bg "sim"      @("-S", "127.0.0.1:$SimPort", "simulator/index.php")
+Start-Bg "api"      @("-S", "127.0.0.1:$ApiPort", "-t", "public", "public/index.php")
+Start-Bg "channels" @("-S", "127.0.0.1:$ChannelsPort", "-t", "channels/public", "channels/public/index.php")
 foreach ($w in 1..2) { Start-Bg "worker$w" @("bin/mv", "worker", "--id=w$w") }
 Start-Bg "sms" @("bin/mv", "sms")
 $procs | Set-Content $pidFile
@@ -74,16 +87,16 @@ Start-Sleep 2
 
 Write-Host @"
 
-Maru Power      http://127.0.0.1:8080/power   (customer portal)
-Merchant POS    http://127.0.0.1:8081/pos     (operator till1, PIN 1234)
-Web store       http://127.0.0.1:8081/
-USSD emulator   http://127.0.0.1:8081/ussd-phone
-BPC dashboard   http://127.0.0.1:8080/bpc
-BPC simulator   http://127.0.0.1:8099
+Maru Power      http://127.0.0.1:$ApiPort/power   (customer portal)
+Merchant POS    http://127.0.0.1:$ChannelsPort/pos     (operator till1, PIN 1234)
+Web store       http://127.0.0.1:$ChannelsPort/
+USSD emulator   http://127.0.0.1:$ChannelsPort/ussd-phone
+BPC dashboard   http://127.0.0.1:$ApiPort/bpc
+BPC simulator   http://127.0.0.1:$SimPort
 Logs            $logs
 Stop with:      powershell -ExecutionPolicy Bypass -File scripts\demo-up.ps1 -Stop
 
 Test meters: 94949494949 (Mpho Domestic), 04040404040 (Kgosi Business Centre), 01234567890 (Naledi Clinic)
 "@
-Start-Process "http://127.0.0.1:8081/pos"
-Start-Process "http://127.0.0.1:8080/power"
+Start-Process "http://127.0.0.1:$ChannelsPort/pos"
+Start-Process "http://127.0.0.1:$ApiPort/power"
