@@ -26,6 +26,7 @@ if [ "${1:-}" = "--reset" ]; then
   MV_NEW_PASSWORD=bpc-demo-pass php bin/mv user:add bpc.viewer bpc_viewer
   MV_NEW_PASSWORD=admin1-pass php bin/mv user:add admin1 admin >/dev/null
   MV_NEW_PASSWORD=admin2-pass php bin/mv user:add admin2 admin >/dev/null
+  MV_NEW_PASSWORD=maru1234 php bin/mv portal:user demo@marupower.test "Lethabo Molefe"
 fi
 
 PHP_CLI_SERVER_WORKERS=16 nohup php -S 127.0.0.1:8099 simulator/index.php >/tmp/sim.log 2>&1 &
@@ -40,5 +41,5 @@ Core API        http://127.0.0.1:8080/v1     BPC dashboard http://127.0.0.1:8080
 Web store       http://127.0.0.1:8081/       Maru app      http://127.0.0.1:8081/app
 Merchant POS    http://127.0.0.1:8081/pos    (operator till1, PIN 1234)
 USSD emulator   http://127.0.0.1:8081/ussd-phone
-Maru Power      http://127.0.0.1:8080/power   (customer portal)
+Maru Power      http://127.0.0.1:8080/power   (customer portal: demo@marupower.test / maru1234)
 TXT

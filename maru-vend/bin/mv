@@ -227,6 +227,14 @@ switch ($cmd) {
             'rate_limit_per_s' => $app->settings->int('rate_per_s'), 'bpc_side' => $stats]);
         break;
 
+    case 'portal:user':
+        // bin/mv portal:user <email> "<full name>"  Maru Power customer account (password from MV_NEW_PASSWORD or generated)
+        $app = App::boot();
+        $pw = getenv('MV_NEW_PASSWORD') ?: bin2hex(random_bytes(6));
+        $id = (new \MaruVend\Portal\Portal($app))->signup($args[1] ?? 'Customer', $args[0], $pw);
+        echo "Maru Power account $args[0] created (id $id).\nPassword: $pw\n";
+        break;
+
     case 'user:add':
         // bin/mv user:add <username> <role: admin|finance|support|bpc_viewer>  (password read from MV_NEW_PASSWORD or generated)
         $app = App::boot();

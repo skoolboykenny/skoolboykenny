@@ -65,6 +65,7 @@ if ($Reset) {
     $env:MV_NEW_PASSWORD = "bpc-demo-pass"; php bin/mv user:add bpc.viewer bpc_viewer
     $env:MV_NEW_PASSWORD = "admin1-pass"; php bin/mv user:add admin1 admin | Out-Null
     $env:MV_NEW_PASSWORD = "admin2-pass"; php bin/mv user:add admin2 admin | Out-Null
+    $env:MV_NEW_PASSWORD = "maru1234"; php bin/mv portal:user demo@marupower.test "Lethabo Molefe"
     Remove-Item Env:MV_NEW_PASSWORD
 }
 php bin/mv setting:set bpc_endpoint "http://127.0.0.1:$SimPort" | Out-Null
@@ -87,7 +88,7 @@ Start-Sleep 2
 
 Write-Host @"
 
-Maru Power      http://127.0.0.1:$ApiPort/power   (customer portal)
+Maru Power      http://127.0.0.1:$ApiPort/power   (customer portal: demo@marupower.test / maru1234)
 Merchant POS    http://127.0.0.1:$ChannelsPort/pos     (operator till1, PIN 1234)
 Web store       http://127.0.0.1:$ChannelsPort/
 USSD emulator   http://127.0.0.1:$ChannelsPort/ussd-phone
