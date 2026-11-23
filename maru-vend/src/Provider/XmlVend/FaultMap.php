@@ -19,6 +19,17 @@ use MaruVend\Provider\ProviderResult;
  *
  * Utility-specific extensions (e.g. BPC's own BusinessRuleEx subclasses) are recognised by name
  * suffix, so they are handled correctly without code changes; their customer messages are shown.
+ *
+ * Regional profile (Eskom XMLVend 2.1 extensions 1.8, sections 4.5.1-4.5.2, and the Eskom test-suite
+ * business rules 2.1.4): two extension faults say nothing about whether a token was issued, so the
+ * name-suffix rule must never classify them as business faults (that would refund a sale that may
+ * have a token):
+ *  DuplicateMsgIDEx                  the server rejected THIS request because its msgID was used
+ *                                    before: this request was not processed. Retry with a new msgID
+ *                                    (system fault); it also means our msgID store or terminal
+ *                                    ownership is broken, so it is alerted by its code.
+ *  IndeterminateLastResponseEx       on advice: the server cannot say what happened. Hold the sale
+ *                                    for reconciliation; never fail it.
  */
 final class FaultMap
 {
@@ -29,12 +40,22 @@ final class FaultMap
         'SGCAuthorisationEx', 'InsufficientMeterDataEx', 'STSDataEx', 'ReprintDepositSlipEx', 'VendorCreditEx',
         'ReprintEndBatchEx', 'ServiceChrgEx', 'ReprintEx', 'UnknownMeterEx', 'RequireMeterCardEx',
         'UnknownMeterUpdateMtrKeyEx', 'StartBatchEx', 'UpdateMtrKeySameEx', 'VerifyTokenEx',
+        // Regional extensions seen in the Eskom profile (business rules 2.2): the meter data is wrong
+        // or incomplete for this request; nothing was issued and the customer must correct it.
+        'MeterDataMisMatchEx', 'GracePurchasesDepletedEx', 'MeterNotRegisteredEx', 'AccTypeEx', 'OtherDataEx',
     ];
+
+    /** Faults that never mean "rejected by rule" (see class comment). Matched case-insensitively. */
+    public const NOT_PROCESSED_RETRY = ['duplicatemsgidex'];
+    public const INDETERMINATE = ['indeterminatelastresponseex', 'indeterminantlastresponseex', 'indefinatelastresponseex'];
 
     public static function outcome(string $type, string $op): string
     {
         $type = self::localName($type);
+        $lc = strtolower($type);
         return match (true) {
+            in_array($lc, self::NOT_PROCESSED_RETRY, true) => ProviderResult::SYSTEM_FAULT,
+            in_array($lc, self::INDETERMINATE, true) => ProviderResult::PENDING,
             in_array($type, self::BUSINESS_RULE, true) => ProviderResult::BUSINESS_FAULT,
             $type === 'SystemEx' => ProviderResult::SYSTEM_FAULT,
             $type === 'LastResponseEx' => ProviderResult::NOT_FOUND,
@@ -46,6 +67,11 @@ final class FaultMap
             str_ends_with($type, 'Ex') && $op !== 'advice' => ProviderResult::BUSINESS_FAULT,
             default => $op === 'creditvend' || $op === 'advice' ? ProviderResult::UNKNOWN : ProviderResult::SYSTEM_FAULT,
         };
+    }
+
+    public static function isIndeterminate(string $type): bool
+    {
+        return in_array(strtolower(self::localName($type)), self::INDETERMINATE, true);
     }
 
     public static function localName(string $qname): string

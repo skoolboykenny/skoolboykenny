@@ -33,6 +33,15 @@ use PDO;
  * still answer correctly. If the terminal has sent other requests since, a LastResponseEx is NOT
  * treated as "never processed": the sale is held for manual reconciliation instead.
  *
+ * Sign-in check (Eskom "Guideline for the development of online vending clients" 1.4.7, the
+ * regional practice for detecting missing vend responses): a terminal whose last credit vend got no
+ * definite answer (a crash, a killed worker, a failover mid-vend) must advise that request BEFORE it
+ * sends anything else, because the next request overwrites the server's "last response" for the
+ * terminal. signIn() does this; every confirm and credit vend runs it first, and a worker runs it at
+ * start. While the open item cannot be resolved, the terminal sends nothing (SYSTEM_FAULT
+ * TERMINAL_RECOVERING, so the sale is retried later and nothing is lost). A resolved outcome is
+ * stored on the request row and used by lastResponse() for that sale.
+ *
  * Element names and namespaces of the revenue messages follow the NRS 009-6-10 class diagrams
  * and the naming of the base schema; they must be checked against the revenue XSD and WSDL BPC
  * supplies (5.2.2.1 says the schemas are definitive). They are isolated in XmlVendMessages.
@@ -52,11 +61,44 @@ final class XmlVendProvider implements VendProvider
         return 'xmlvend';
     }
 
+    /**
+     * Resolve this terminal's open credit vend, if any. Returns null when the terminal is clear to
+     * send, or the result to return instead of sending (the terminal is still recovering).
+     */
+    public function signIn(): ?ProviderResult
+    {
+        $st = $this->pdo->prepare("SELECT * FROM xmlvend_messages WHERE terminal_id = ? AND operation <> 'advice' ORDER BY id DESC LIMIT 1");
+        $st->execute([$this->terminalId]);
+        $last = $st->fetch();
+        if (!$last || $last['operation'] !== 'creditvend' || (int) $last['answered'] === 1 || $last['recovered'] !== null) {
+            return null;
+        }
+        $a = $this->advise($last);
+        $stored = match (true) {
+            $a->outcome === ProviderResult::NOT_FOUND => 'NOT_PROCESSED',
+            // The server says it cannot tell (IndeterminateLastResponseEx): asking again will not
+            // help, so the sale is held for reconciliation and the terminal may carry on.
+            $a->outcome === ProviderResult::PENDING && FaultMap::isIndeterminate((string) $a->faultCode) => 'INDETERMINATE',
+            isset($a->data['raw']) => $a->data['raw'],
+            default => null,
+        };
+        if ($stored === null) {
+            error_log("[xmlvend {$this->terminalId}] sign-in: open credit vend for {$last['client_sale_id']} not resolved ({$a->faultCode}); terminal held");
+            return new ProviderResult(ProviderResult::SYSTEM_FAULT, [], 'TERMINAL_RECOVERING',
+                'Terminal is recovering an earlier sale; not sent', exchange: $a->exchange);
+        }
+        $this->pdo->prepare('UPDATE xmlvend_messages SET recovered = ? WHERE id = ?')->execute([$stored, $last['id']]);
+        return null;
+    }
+
     public function confirmCustomer(string $clientSaleId, string $meter, int $amountThebe, string $terminal): ProviderResult
     {
+        if ($blocked = $this->signIn()) {
+            return $blocked;
+        }
         $msgId = $this->allocateMsgId($clientSaleId, 'confirm');
         $xml = XmlVendMessages::confirmCustomerReq($this->cfg, $this->terminalId, $msgId, $meter);
-        $r = $this->send($xml, 'confirm');
+        $r = $this->send($xml, 'confirm', $msgId['id']);
         if ($r->outcome !== ProviderResult::OK) {
             // A confirm issues nothing: any uncertainty is simply "could not confirm".
             return $r->outcome === ProviderResult::UNKNOWN
@@ -77,10 +119,13 @@ final class XmlVendProvider implements VendProvider
 
     public function creditVend(string $clientSaleId, string $meter, int $amountThebe, string $terminal): ProviderResult
     {
+        if ($blocked = $this->signIn()) {
+            return $blocked;
+        }
         // A new msgID per attempt: a retry only ever follows a definitive "not processed".
         $msgId = $this->allocateMsgId($clientSaleId, 'creditvend', $meter);
         $xml = XmlVendMessages::creditVendReq($this->cfg, $this->terminalId, $msgId, $meter, $amountThebe);
-        $r = $this->send($xml, 'creditvend');
+        $r = $this->send($xml, 'creditvend', $msgId['id']);
         if ($r->outcome === ProviderResult::OK) {
             return $this->receipt($r);
         }
@@ -113,23 +158,21 @@ final class XmlVendProvider implements VendProvider
             // We never allocated a msgID, so nothing was ever sent for this sale.
             return new ProviderResult(ProviderResult::NOT_FOUND, [], 'NO_REQUEST', 'No credit vend was sent for this sale');
         }
-        $adviceMsgId = $this->allocateMsgId($clientSaleId, 'advice', null, $orig['terminal_id']);
-        $xml = XmlVendMessages::lastRespAdviceReq($this->cfg, $orig['terminal_id'], $adviceMsgId,
-            ['dateTime' => $orig['msg_datetime'], 'uniqueNumber' => (int) $orig['msg_unique']]);
-        $r = $this->send($xml, 'advice');
-
-        if ($r->outcome === ProviderResult::OK) {
-            $inner = XmlVendMessages::lastResponseBody($r->data['dom']);
-            if ($inner === null) {
-                return new ProviderResult(ProviderResult::PENDING, [], 'NO_LAST_RESPONSE', 'Advice response carried no last response', exchange: $r->exchange);
-            }
-            if ($inner['type'] === 'fault') {
-                // The original request was answered with a fault: map it as if received first time.
-                return $this->faultResult($inner['faultType'], $inner['desc'], 'creditvend', $r->exchange);
-            }
-            return $this->receipt(new ProviderResult(ProviderResult::OK, ['dom' => $inner['dom']], exchange: $r->exchange));
+        if ($orig['recovered'] === 'NOT_PROCESSED') {
+            // The sign-in check got LastResponseEx before the terminal sent anything else: definitive.
+            return new ProviderResult(ProviderResult::NOT_FOUND, [], 'LastResponseEx', 'BPC holds no response: not processed (sign-in check)');
         }
-
+        if ($orig['recovered'] === 'INDETERMINATE') {
+            return new ProviderResult(ProviderResult::PENDING, [], 'IndeterminateLastResponseEx',
+                'BPC cannot determine the outcome; reconcile this sale with BPC records');
+        }
+        if ($orig['recovered'] !== null) {
+            $dom = new \DOMDocument();
+            $dom->loadXML($orig['recovered'], LIBXML_NONET);
+            return $this->interpretAdvice(new ProviderResult(ProviderResult::OK, ['dom' => $dom, 'raw' => $orig['recovered']],
+                exchange: ['request' => '', 'response' => $orig['recovered'], 'http' => 200, 'path' => 'advice (stored at sign-in)']));
+        }
+        $r = $this->advise($orig);
         if ($r->outcome === ProviderResult::NOT_FOUND) {
             // LastResponseEx means "not processed, the client can safely repeat" (4.6.2.2), but only
             // if the server's "last response" for this terminal really refers to our request.
@@ -140,10 +183,44 @@ final class XmlVendProvider implements VendProvider
                     'Terminal sent other requests since; reconcile this sale with BPC records', exchange: $r->exchange);
             }
         }
+        if (in_array($r->outcome, [ProviderResult::OK, ProviderResult::BUSINESS_FAULT, ProviderResult::NOT_FOUND], true)) {
+            // Resolved (possibly from the other site after a failover): the terminal's open item is closed.
+            $this->pdo->prepare('UPDATE xmlvend_messages SET answered = 1 WHERE id = ?')->execute([$orig['id']]);
+        }
         return $r;
     }
 
     // ------------------------------------------------------------------ internals
+
+    /** Send LastRespAdviceReq for one stored credit vend row and interpret the answer. */
+    private function advise(array $orig): ProviderResult
+    {
+        $adviceMsgId = $this->allocateMsgId($orig['client_sale_id'], 'advice', null, $orig['terminal_id']);
+        $xml = XmlVendMessages::lastRespAdviceReq($this->cfg, $orig['terminal_id'], $adviceMsgId,
+            ['dateTime' => $orig['msg_datetime'], 'uniqueNumber' => (int) $orig['msg_unique']]);
+        return $this->interpretAdvice($this->send($xml, 'advice', $adviceMsgId['id']));
+    }
+
+    private function interpretAdvice(ProviderResult $r): ProviderResult
+    {
+        if ($r->outcome !== ProviderResult::OK) {
+            return $r;
+        }
+        $inner = XmlVendMessages::lastResponseBody($r->data['dom']);
+        if ($inner === null) {
+            return new ProviderResult(ProviderResult::PENDING, [], 'NO_LAST_RESPONSE', 'Advice response carried no last response', exchange: $r->exchange);
+        }
+        if ($inner['type'] === 'fault') {
+            // The original request was answered with a fault: map it as if received first time.
+            $f = $this->faultResult($inner['faultType'], $inner['desc'], 'creditvend', $r->exchange);
+            return new ProviderResult($f->outcome, ['raw' => $r->data['raw']], $f->faultCode, $f->message, exchange: $f->exchange);
+        }
+        $rc = $this->receipt(new ProviderResult(ProviderResult::OK, ['dom' => $inner['dom']], exchange: $r->exchange));
+        return $rc->outcome === ProviderResult::OK
+            ? new ProviderResult(ProviderResult::OK, $rc->data + ['raw' => $r->data['raw']], exchange: $rc->exchange)
+            : $rc;
+    }
+
 
     /** Allocate the next msgID for this terminal and store it before anything is sent. */
     private function allocateMsgId(string $clientSaleId, string $op, ?string $meter = null, ?string $terminal = null): array
@@ -156,7 +233,7 @@ final class XmlVendProvider implements VendProvider
             $id = (int) $pdo->lastInsertId();
             $unique = ($id % 999999) + 1; // 1..999999 (6 digits, positiveInteger)
             $pdo->prepare('UPDATE xmlvend_messages SET msg_unique = ? WHERE id = ?')->execute([$unique, $id]);
-            return ['dateTime' => $dt, 'uniqueNumber' => $unique];
+            return ['dateTime' => $dt, 'uniqueNumber' => $unique, 'id' => $id];
         });
     }
 
@@ -171,7 +248,17 @@ final class XmlVendProvider implements VendProvider
         return new ProviderResult(ProviderResult::OK, $d, exchange: $r->exchange);
     }
 
-    private function send(string $xml, string $op): ProviderResult
+    private function send(string $xml, string $op, int $msgRowId): ProviderResult
+    {
+        $r = $this->transmit($xml, $op);
+        if ($r->outcome !== ProviderResult::UNKNOWN) {
+            // A definite answer (or a request that never left): this request is no longer open.
+            $this->pdo->prepare('UPDATE xmlvend_messages SET answered = 1 WHERE id = ?')->execute([$msgRowId]);
+        }
+        return $r;
+    }
+
+    private function transmit(string $xml, string $op): ProviderResult
     {
         $url = rtrim($this->settings->endpoint(), '/') . $this->cfg->path; // re-read every call (clause 7.11)
         $ch = curl_init($url);
@@ -180,13 +267,15 @@ final class XmlVendProvider implements VendProvider
             CURLOPT_POSTFIELDS => $xml,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => ['Content-Type: text/xml; charset=utf-8', 'SOAPAction: ""'],
-            CURLOPT_ENCODING => 'gzip',                       // 5.2.5: optional HTTP gzip
             CURLOPT_CONNECTTIMEOUT => 10,
             CURLOPT_TIMEOUT => $this->settings->workerTimeout(), // mapped to BPC's timeout (clause 7.8)
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_SSLVERSION => CURL_SSLVERSION_TLSv1_2,
         ];
+        if ($this->cfg->gzip) {
+            $opts[CURLOPT_ENCODING] = 'gzip';                 // 5.2.5: optional HTTP gzip
+        }
         if ($this->cfg->clientCert) { // mutual TLS (5.2.6.2.3.3)
             $opts[CURLOPT_SSLCERT] = $this->cfg->clientCert;
             $opts[CURLOPT_SSLKEY] = $this->cfg->clientKey;
@@ -219,7 +308,7 @@ final class XmlVendProvider implements VendProvider
         if ($http !== 200) {
             return new ProviderResult($op === 'creditvend' ? ProviderResult::UNKNOWN : ProviderResult::SYSTEM_FAULT, [], "HTTP$http", 'Unexpected HTTP status', exchange: $exchange);
         }
-        return new ProviderResult(ProviderResult::OK, ['dom' => $dom], exchange: $exchange);
+        return new ProviderResult(ProviderResult::OK, ['dom' => $dom, 'raw' => $raw], exchange: $exchange);
     }
 
     /** Map an XMLVend fault (4.6.3, 4.7.3.9) to an outcome. Annex E documents this table. */

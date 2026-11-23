@@ -21,7 +21,7 @@ final class Dashboard
     public static function register(SlimApp $slim, callable $appFactory): void
     {
         $page = function (Response $res, string $title, string $body, ?array $user = null): Response {
-            $nav = $user ? '<nav><a href="/bpc">Overview</a><a href="/bpc/sales">Sales</a><a href="/bpc/queue">Queue</a>'
+            $nav = $user ? '<nav><a href="/bpc">Overview</a><a href="/bpc/classic">Classic</a><a href="/bpc/sales">Sales</a><a href="/bpc/queue">Queue</a>'
                 . '<a href="/bpc/audit">Audit trail</a><a href="/bpc/reports">Reports</a>'
                 . '<span class="who">' . h($user['username']) . ' (' . h($user['role']) . ') <a href="/bpc/logout">Log out</a></span></nav>' : '';
             $res->getBody()->write('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
@@ -70,7 +70,27 @@ final class Dashboard
             return $res->withHeader('Location', '/bpc/login')->withStatus(302);
         });
 
-        $slim->get('/bpc', $guard(function ($r, $res, $a, $u, App $app) use ($page) {
+        // Operations dashboard (live; figures from /bpc/api/overview).
+        $slim->get('/bpc', $guard(function ($r, Response $res, $a, $u, App $app) {
+            $res->getBody()->write((string) file_get_contents(__DIR__ . '/ops.html'));
+            return $res->withHeader('Content-Type', 'text/html; charset=utf-8')->withHeader('X-Frame-Options', 'DENY')
+                ->withHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+                    . "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
+                    . "connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'")
+                ->withHeader('Cache-Control', 'no-store');
+        }));
+        $slim->get('/bpc/api/overview', function (Request $r, Response $res) use ($user, $appFactory) {
+            $u = $user($r);
+            if (!$u) {
+                return $res->withStatus(401);
+            }
+            session_write_close(); // polling must not hold the session lock
+            $res->getBody()->write(json_encode(OpsOverview::build($appFactory($r->getServerParams()['REMOTE_ADDR'] ?? null), $u), JSON_THROW_ON_ERROR));
+            return $res->withHeader('Content-Type', 'application/json')->withHeader('Cache-Control', 'no-store');
+        });
+
+        // The previous plain overview, kept for comparison.
+        $slim->get('/bpc/classic', $guard(function ($r, $res, $a, $u, App $app) use ($page) {
             $pdo = $app->pdo;
             $today = $pdo->query("SELECT COUNT(*) n, COALESCE(SUM(amount_thebe),0) v FROM vend_sales WHERE state='SUCCEEDED' AND resolved_at >= CURDATE()")->fetch();
             $states = $pdo->query("SELECT state, COUNT(*) n FROM vend_sales WHERE created_at >= CURDATE() GROUP BY state")->fetchAll(\PDO::FETCH_KEY_PAIR);
