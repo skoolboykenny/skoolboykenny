@@ -1,0 +1,8 @@
+# Apache / cPanel: send every request that is not a real file to the app (Slim).
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]
+# Pass the Authorization header through to PHP.
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+Options -Indexes
