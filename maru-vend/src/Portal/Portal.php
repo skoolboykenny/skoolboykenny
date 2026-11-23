@@ -26,7 +26,12 @@ final class Portal
 {
     public const MAX_CLAIM_ATTEMPTS = 5; // per account per hour
 
-    public function __construct(private App $app) {}
+    private Accounts $acc;
+
+    public function __construct(private App $app, ?Accounts $accounts = null)
+    {
+        $this->acc = $accounts ?? Accounts::for($app);
+    }
 
     private function pdo(): PDO
     {
@@ -81,20 +86,19 @@ final class Portal
         if (strlen($password) < 8) {
             throw new VendException('BAD_REQUEST', 'Password must be at least 8 characters.');
         }
-        if ($this->one('SELECT id FROM portal_users WHERE email = ?', [$email])) {
+        if ($this->acc->one('SELECT id FROM {users} WHERE email = ?', [$email])) {
             throw new VendException('EXISTS', 'An account with this email already exists.', 409);
         }
-        $this->pdo()->prepare('INSERT INTO portal_users (name, account_type, company_name, company_reg, vat_no, email, password_hash) VALUES (?,?,?,?,?,?,?)')
-            ->execute([$name, $type, $type === 'business' ? $company : null, $type === 'business' ? $reg : null,
+        $this->acc->run('INSERT INTO {users} (name, account_type, company_name, company_reg, vat_no, email, password_hash) VALUES (?,?,?,?,?,?,?)', [$name, $type, $type === 'business' ? $company : null, $type === 'business' ? $reg : null,
                 $type === 'business' && $vat !== '' ? $vat : null, $email, password_hash($password, PASSWORD_DEFAULT)]);
-        $id = (int) $this->pdo()->lastInsertId();
+        $id = $this->acc->lastId();
         $this->app->audit->record("portal:$id", 'customer', 'portal.signup', 'portal_users', (string) $id, null, $type);
         return $id;
     }
 
     public function login(string $email, string $password): int
     {
-        $u = $this->one('SELECT id, password_hash FROM portal_users WHERE email = ?', [strtolower(trim($email))]);
+        $u = $this->acc->one('SELECT id, password_hash FROM {users} WHERE email = ?', [strtolower(trim($email))]);
         $ok = $u && password_verify($password, $u['password_hash']);
         $this->app->audit->record('portal:' . ($u['id'] ?? '?'), 'customer', $ok ? 'portal.login' : 'portal.login_failed', 'portal_users', isset($u['id']) ? (string) $u['id'] : null);
         if (!$ok) {
@@ -106,7 +110,7 @@ final class Portal
 
     public function me(int $uid): array
     {
-        $u = $this->one('SELECT id, name, account_type, company_name, company_reg, vat_no, email, msisdn, created_at FROM portal_users WHERE id = ?', [$uid]);
+        $u = $this->acc->one('SELECT id, name, account_type, company_name, company_reg, vat_no, email, msisdn, created_at FROM {users} WHERE id = ?', [$uid]);
         if (!$u) {
             throw new VendException('UNAUTHORISED', 'Please sign in.', 401);
         }
@@ -120,39 +124,40 @@ final class Portal
         if (!$m) {
             throw new VendException('BAD_REQUEST', 'Enter a valid Botswana mobile number.');
         }
-        $other = $this->one('SELECT id FROM portal_users WHERE msisdn = ? AND id <> ?', [$m, $uid]);
+        $other = $this->acc->one('SELECT id FROM {users} WHERE msisdn = ? AND id <> ?', [$m, $uid]);
         if ($other) {
             throw new VendException('EXISTS', 'That number is already verified on another account.', 409);
         }
-        $recent = $this->one("SELECT COUNT(*) n FROM portal_codes WHERE user_id = ? AND purpose = 'phone' AND expires_at > NOW(6) - INTERVAL 50 MINUTE", [$uid]);
+        $recent = $this->acc->one("SELECT COUNT(*) n FROM {codes} WHERE user_id = ? AND purpose = 'phone' AND expires_at > NOW(6) - INTERVAL 50 MINUTE", [$uid]);
         if ((int) $recent['n'] >= 5) {
             throw new VendException('RATE_LIMIT', 'Too many codes requested. Try again in an hour.', 429);
         }
         $code = sprintf('%06d', random_int(0, 999999));
-        Db::tx($this->pdo(), function (PDO $pdo) use ($uid, $m, $code) {
-            $pdo->prepare("INSERT INTO portal_codes (user_id, purpose, target, code_hash, expires_at) VALUES (?, 'phone', ?, ?, NOW(6) + INTERVAL 10 MINUTE)")
-                ->execute([$uid, $m, hash('sha256', $code)]);
-            $pdo->prepare('INSERT INTO sms_outbox (msisdn, body) VALUES (?, ?)')
-                ->execute([$m, "Your Maru Power code is $code. It expires in 10 minutes. Do not share it."]);
-        });
+        $this->acc->run("INSERT INTO {codes} (user_id, purpose, target, code_hash, expires_at) VALUES (?, 'phone', ?, ?, NOW(6) + INTERVAL 10 MINUTE)",
+            [$uid, $m, hash('sha256', $code)]);
+        $this->pdo()->prepare('INSERT INTO sms_outbox (msisdn, body) VALUES (?, ?)')
+            ->execute([$m, "Your Maru Power code is $code. It expires in 10 minutes. Do not share it."]);
         return ['sent_to' => $m, 'demo_code' => getenv('MV_DEMO') === '1' ? $code : null];
     }
 
     /** Verify the code; then link every meter that has bought tokens sent to this number. */
     public function verifyPhone(int $uid, string $code): array
     {
-        $c = $this->one("SELECT * FROM portal_codes WHERE user_id = ? AND purpose = 'phone' AND used_at IS NULL
+        $c = $this->acc->one("SELECT * FROM {codes} WHERE user_id = ? AND purpose = 'phone' AND used_at IS NULL
             AND expires_at > NOW(6) ORDER BY id DESC LIMIT 1", [$uid]);
         if (!$c || $c['attempts'] >= 5) {
             throw new VendException('BAD_CODE', 'Code expired. Request a new one.');
         }
         if (!hash_equals($c['code_hash'], hash('sha256', trim($code)))) {
-            $this->pdo()->prepare('UPDATE portal_codes SET attempts = attempts + 1 WHERE id = ?')->execute([$c['id']]);
+            $this->acc->run('UPDATE {codes} SET attempts = attempts + 1 WHERE id = ?', [$c['id']]);
             throw new VendException('BAD_CODE', 'Incorrect code.');
         }
+        // The account (Maru Quick database) is updated first; linking meters (Maru Vend) is safe to repeat.
+        if ($this->acc->run('UPDATE {codes} SET used_at = NOW(6) WHERE id = ? AND used_at IS NULL', [$c['id']]) !== 1) {
+            throw new VendException('BAD_CODE', 'Code already used. Request a new one.');
+        }
+        $this->acc->run('UPDATE {users} SET msisdn = ? WHERE id = ?', [$c['target'], $uid]);
         return Db::tx($this->pdo(), function (PDO $pdo) use ($uid, $c) {
-            $pdo->prepare('UPDATE portal_codes SET used_at = NOW(6) WHERE id = ?')->execute([$c['id']]);
-            $pdo->prepare('UPDATE portal_users SET msisdn = ? WHERE id = ?')->execute([$c['target'], $uid]);
             $linked = [];
             $skipped = [];
             $st = $pdo->prepare("SELECT meter_number, MAX(id) sale_id, MAX(customer_name) customer_name FROM vend_sales
@@ -255,7 +260,7 @@ final class Portal
     public function share(int $uid, string $meter, string $email): array
     {
         $a = $this->owner($uid, $meter);
-        $u = $this->one('SELECT id FROM portal_users WHERE email = ?', [strtolower(trim($email))]);
+        $u = $this->acc->one('SELECT id FROM {users} WHERE email = ?', [strtolower(trim($email))]);
         if (!$u) {
             throw new VendException('NOT_FOUND', 'No Maru Power account uses that email. Ask them to sign up first.', 404);
         }
@@ -305,8 +310,13 @@ final class Portal
         $m = array_values(array_filter($this->meters($uid), fn ($r) => $r['meter_number'] === $meter))[0];
         $m['transactions'] = $this->transactions($uid, $meter, 100);
         if ($a['role'] === 'owner') {
-            $m['members'] = $this->all("SELECT u.id, u.name, u.email, pm.role, pm.linked_by FROM portal_meters pm JOIN portal_users u ON u.id = pm.user_id
-                WHERE pm.meter_number = ? ORDER BY pm.role DESC, u.name", [$meter]);
+            // Access is in Maru Vend; names and emails come from the account database.
+            $access = $this->all("SELECT user_id, role, linked_by FROM portal_meters WHERE meter_number = ? ORDER BY role = 'owner' DESC, id", [$meter]);
+            $ids = array_map(fn ($r) => (int) $r['user_id'], $access);
+            $people = $ids ? array_column($this->acc->all('SELECT id, name, email FROM {users} WHERE id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')', $ids), null, 'id') : [];
+            $m['members'] = array_values(array_filter(array_map(fn ($r) => isset($people[$r['user_id']])
+                ? ['id' => (int) $r['user_id'], 'name' => $people[$r['user_id']]['name'], 'email' => $people[$r['user_id']]['email'], 'role' => $r['role'], 'linked_by' => $r['linked_by']]
+                : null, $access)));
         }
         return $m;
     }

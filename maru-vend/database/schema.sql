@@ -315,7 +315,7 @@ CREATE TABLE IF NOT EXISTS portal_meters (
   created_at    DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   UNIQUE KEY uq_user_meter (user_id, meter_number),
   KEY ix_meter (meter_number),
-  FOREIGN KEY (user_id) REFERENCES portal_users(id)
+  KEY ix_user (user_id)               -- the account may live in the Maru Quick database (see Accounts.php)
 ) ENGINE=InnoDB;
 
 -- Customer payments, verified before a sale is released to the vend queue. A payment reference
@@ -342,3 +342,6 @@ ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS account_type ENUM('household',
 ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS company_name VARCHAR(160) NULL AFTER account_type;
 ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS company_reg VARCHAR(40) NULL AFTER company_name;   -- CIPA UIN
 ALTER TABLE portal_users ADD COLUMN IF NOT EXISTS vat_no VARCHAR(40) NULL AFTER company_reg;         -- BURS VAT number, optional
+
+-- Accounts can live in the Maru Quick website database, so meters no longer point at portal_users here.
+ALTER TABLE portal_meters DROP FOREIGN KEY IF EXISTS portal_meters_ibfk_1;
