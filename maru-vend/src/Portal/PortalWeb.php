@@ -17,20 +17,21 @@ final class PortalWeb
 {
     public static function register(SlimApp $slim, callable $appFactory): void
     {
+        $base = rtrim((string) getenv('MV_BASE_PATH'), '/'); // '' or e.g. '/maru-power'
         $json = function (Response $res, array $data, int $status = 200): Response {
             $res->getBody()->write(json_encode($data, JSON_UNESCAPED_SLASHES));
             return $res->withHeader('Content-Type', 'application/json')->withHeader('Cache-Control', 'no-store')->withStatus($status);
         };
-        $session = function (): void {
+        $session = function () use ($base): void {
             if (session_status() !== PHP_SESSION_ACTIVE) {
                 session_name('maru_power');
-                session_start(['cookie_httponly' => true, 'cookie_samesite' => 'Strict', 'cookie_path' => '/power',
+                session_start(['cookie_httponly' => true, 'cookie_samesite' => 'Strict', 'cookie_path' => $base . '/power',
                     'cookie_secure' => getenv('MV_SECURE_COOKIES') === '1']);
             }
         };
 
-        $slim->get('/power', function (Request $r, Response $res) {
-            $res->getBody()->write((string) file_get_contents(__DIR__ . '/../../portal/index.html'));
+        $slim->get('/power', function (Request $r, Response $res) use ($base) {
+            $res->getBody()->write(str_replace('"/power/', '"' . $base . '/power/', (string) file_get_contents(__DIR__ . '/../../portal/index.html')));
             return $res->withHeader('Content-Type', 'text/html; charset=utf-8')->withHeader('X-Frame-Options', 'DENY')
                 ->withHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'");
         });
@@ -42,7 +43,7 @@ final class PortalWeb
         }
 
         // Sign-in from the Maru Quick website (maru_power_login.php): redeem the ticket, start the session.
-        $slim->get('/power/sso', function (Request $req, Response $res) use ($session, $appFactory) {
+        $slim->get('/power/sso', function (Request $req, Response $res) use ($session, $appFactory, $base) {
             $session();
             $secret = Sso::secret();
             /** @var App $app */
@@ -57,11 +58,11 @@ final class PortalWeb
             }
             $app->audit->record('portal:' . ($uid ?? '?'), 'customer', $uid ? 'portal.sso_login' : 'portal.sso_rejected', 'portal_users', $uid ? (string) $uid : null);
             if ($uid === null) {
-                return $res->withHeader('Location', '/power#/login')->withStatus(302);
+                return $res->withHeader('Location', $base . '/power#/login')->withStatus(302);
             }
             session_regenerate_id(true);
             $_SESSION['mp_uid'] = $uid;
-            return $res->withHeader('Location', '/power#/')->withHeader('Referrer-Policy', 'no-referrer')->withStatus(302);
+            return $res->withHeader('Location', $base . '/power#/')->withHeader('Referrer-Policy', 'no-referrer')->withStatus(302);
         });
 
         $route = function (string $method, string $path, callable $fn, bool $auth = true) use ($slim, $json, $session, $appFactory) {

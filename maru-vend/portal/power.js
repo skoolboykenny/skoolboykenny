@@ -3,6 +3,8 @@
   'use strict';
   const $ = (s, el = document) => el.querySelector(s);
   const app = $('#app');
+  // Works at /power or inside a folder, e.g. /maru-power/power.
+  const BASE = location.pathname.replace(/\/power\/?$/, '');
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const P = (thebe) => 'P' + (Number(thebe || 0) / 100).toLocaleString('en-BW', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const tok = (t) => (t ? String(t).replace(/\D/g, '').replace(/(\d{4})(?=\d)/g, '$1 ') : '');
@@ -29,7 +31,7 @@
 
   // ---------------------------------------------------------------- api
   async function api(method, path, body) {
-    const r = await fetch('/power/api' + path, {
+    const r = await fetch(BASE + '/power/api' + path, {
       method, credentials: 'same-origin',
       headers: body ? { 'Content-Type': 'application/json' } : {},
       body: body ? JSON.stringify(body) : undefined,
@@ -405,7 +407,7 @@
         const txs = await api('GET', '/transactions');
         txs.filter((t) => t.id > last && t.state === 'SUCCEEDED').forEach((t) => {
           const msg = `${t.label}: ${Number(t.kwh).toFixed(1)} kWh, token ${tok(t.token)}`;
-          if ('Notification' in window && Notification.permission === 'granted') new Notification('New token bought', { body: msg, icon: '/power/logo.svg' });
+          if ('Notification' in window && Notification.permission === 'granted') new Notification('New token bought', { body: msg, icon: BASE + '/power/logo.svg' });
           else toast(msg);
         });
         last = Math.max(last, ...txs.map((t) => t.id));

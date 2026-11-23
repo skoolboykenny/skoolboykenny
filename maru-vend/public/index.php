@@ -14,6 +14,8 @@ use MaruVend\Portal\PortalWeb;
 
 $factory = fn (?string $ip) => App::boot($ip);
 $slim = ApiApp::create($factory);
+// When installed in a folder of the website (e.g. public_html/maru-power), MV_BASE_PATH=/maru-power.
+$slim->setBasePath(rtrim((string) getenv('MV_BASE_PATH'), '/'));
 Dashboard::register($slim, $factory);
 PortalWeb::register($slim, $factory);
 $slim->run();

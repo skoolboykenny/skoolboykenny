@@ -1,0 +1,13 @@
+# Maru Power installed in a folder of the website, e.g. public_html/maru-power.
+# Every request goes through the app's front door (public/index.php), so the code, the
+# libraries and the settings file (.env.php) can never be opened directly.
+Options -Indexes
+DirectoryIndex disabled
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{ENV:REDIRECT_STATUS} ^$
+    RewriteRule ^ public/index.php [L,QSA]
+</IfModule>
+<Files ".env.php">
+    Require all denied
+</Files>
