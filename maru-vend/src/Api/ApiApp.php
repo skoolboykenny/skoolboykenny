@@ -22,6 +22,7 @@ use Slim\Factory\AppFactory;
  *   GET  /v1/vend/{id}                                            -> status; receipt and token when complete
  *   POST /v1/reprint            {receipt_no} | {meter}            -> free reprint
  *   POST /v1/confirm also takes optional msisdn: the token is then sent by SMS as well.
+ *   POST /v1/payments/{provider}/callback  provider-signed payment confirmation (see PaymentCallback)
  *   GET  /v1/demo/sms?msisdn=   test environment only (MV_DEMO=1): SMS sent to a phone, for the USSD emulator
  */
 final class ApiApp
@@ -86,6 +87,23 @@ final class ApiApp
                 return ['messages' => $st->fetchAll()];
             }));
         })->add($auth);
+
+        $slim->post('/v1/payments/{provider}/callback', function (Request $req, Response $res, array $a) use ($appFactory) {
+            $app = $appFactory($req->getServerParams()['REMOTE_ADDR'] ?? null);
+            $body = (string) $req->getBody();
+            $provider = (string) $a['provider'];
+            if (!PaymentCallback::verify($provider, $req->getHeaderLine('X-Pay-Timestamp'), $req->getHeaderLine('X-Pay-Signature'), $body)) {
+                return self::json($res, ['error' => 'UNAUTHORISED', 'message' => 'Bad signature'], 401);
+            }
+            $b = json_decode($body, true) ?: [];
+            try {
+                $s = $app->vend()->verifyPayment((int) ($b['sale_id'] ?? 0), $provider, (string) ($b['payment_ref'] ?? ''),
+                    (int) ($b['amount_thebe'] ?? -1), $body);
+                return self::json($res, ['accepted' => true, 'sale_id' => (int) $s['id'], 'status' => $s['state']]);
+            } catch (VendException $e) {
+                return self::json($res, ['accepted' => false, 'error' => $e->errorCode, 'message' => $e->getMessage()], $e->httpStatus);
+            }
+        });
 
         $slim->get('/health', fn (Request $r, Response $res) => self::json($res, ['ok' => true]));
         return $slim;

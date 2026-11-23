@@ -40,4 +40,5 @@ Core API        http://127.0.0.1:8080/v1     BPC dashboard http://127.0.0.1:8080
 Web store       http://127.0.0.1:8081/       Maru app      http://127.0.0.1:8081/app
 Merchant POS    http://127.0.0.1:8081/pos    (operator till1, PIN 1234)
 USSD emulator   http://127.0.0.1:8081/ussd-phone
+Maru Power      http://127.0.0.1:8080/power   (customer portal)
 TXT

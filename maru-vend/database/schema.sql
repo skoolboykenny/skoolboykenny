@@ -267,3 +267,63 @@ CREATE TABLE IF NOT EXISTS xmlvend_messages (
   KEY ix_sale (client_sale_id, operation),
   KEY ix_terminal (terminal_id, id)
 ) ENGINE=InnoDB;
+
+-- ============================================================ Maru Power (customer portal)
+-- Customers' own accounts. Every sale in vend_sales, from any channel (till/POS, USSD, web, app),
+-- shows up in the account of every user linked to that meter number.
+CREATE TABLE IF NOT EXISTS portal_users (
+  id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+  name           VARCHAR(120) NOT NULL,
+  email          VARCHAR(190) NOT NULL UNIQUE,
+  msisdn         VARCHAR(15) NULL UNIQUE,         -- set only once verified by SMS code
+  password_hash  VARCHAR(255) NOT NULL,
+  created_at     DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS portal_codes (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id     BIGINT NOT NULL,
+  purpose     VARCHAR(16) NOT NULL,               -- 'phone'
+  target      VARCHAR(64) NOT NULL,
+  code_hash   CHAR(64) NOT NULL,
+  attempts    INT NOT NULL DEFAULT 0,
+  expires_at  DATETIME(6) NOT NULL,
+  used_at     DATETIME(6) NULL,
+  KEY ix_user (user_id, purpose),
+  FOREIGN KEY (user_id) REFERENCES portal_users(id)
+) ENGINE=InnoDB;
+
+-- A meter linked to an account. One owner per meter; owners can add members (family, staff, tenants).
+CREATE TABLE IF NOT EXISTS portal_meters (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id       BIGINT NOT NULL,
+  meter_number  VARCHAR(20) NOT NULL,
+  role          ENUM('owner','member') NOT NULL,
+  label         VARCHAR(60) NOT NULL,
+  site_type     ENUM('home','business','other') NOT NULL DEFAULT 'home',
+  linked_by     VARCHAR(32) NOT NULL,             -- receipt | phone | shared
+  proof         VARCHAR(64) NULL,                 -- receipt number or sale id used as proof
+  created_at    DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  UNIQUE KEY uq_user_meter (user_id, meter_number),
+  KEY ix_meter (meter_number),
+  FOREIGN KEY (user_id) REFERENCES portal_users(id)
+) ENGINE=InnoDB;
+
+-- Customer payments, verified before a sale is released to the vend queue. A payment reference
+-- can be used once, and the amount must match the sale to the thebe.
+CREATE TABLE IF NOT EXISTS payments (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+  sale_id       BIGINT NOT NULL,
+  provider      VARCHAR(32) NOT NULL,
+  payment_ref   VARCHAR(64) NOT NULL,
+  amount_thebe  BIGINT NOT NULL,
+  status        ENUM('verified','rejected','reversed') NOT NULL,
+  reason        VARCHAR(255) NULL,
+  body_sha256   CHAR(64) NOT NULL,
+  received_at   DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  UNIQUE KEY uq_ref (provider, payment_ref),
+  KEY ix_sale (sale_id),
+  FOREIGN KEY (sale_id) REFERENCES vend_sales(id)
+) ENGINE=InnoDB;
+
+ALTER TABLE vend_sales ADD COLUMN IF NOT EXISTS portal_user_id BIGINT NULL AFTER msisdn;

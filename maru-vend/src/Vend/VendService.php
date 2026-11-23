@@ -95,17 +95,58 @@ final class VendService
         });
     }
 
-    /** Step 3 (app/web/USSD): the payment provider confirmed the customer paid. */
+    /** Step 3 (app/web/USSD), test payments: the channel says the customer paid. Recorded like a provider payment. */
     public function markPaid(array $channel, int $saleId, string $paymentRef): array
     {
-        return Db::tx($this->pdo, function () use ($channel, $saleId, $paymentRef) {
-            $sale = $this->lockSale($saleId, $channel);
-            if ($sale['state'] !== SaleState::PAYMENT_PENDING) {
-                return $sale;
+        $sale = $this->sale($saleId);
+        if ((int) $sale['merchant_id'] !== (int) $channel['merchant_id']) {
+            throw new VendException('NOT_FOUND', 'Sale not found', 404);
+        }
+        return $this->verifyPayment($saleId, "channel:{$channel['id']}", $paymentRef, (int) $sale['amount_thebe'], $paymentRef);
+    }
+
+    /**
+     * A payment provider (or bank) reports that the customer paid. The sale is released to the vend queue only if:
+     *   - the sale exists and is waiting for payment,
+     *   - the amount paid equals the sale amount exactly,
+     *   - this payment reference has never been used before (per provider).
+     * Every report, accepted or rejected, is kept in `payments` with a hash of the provider's message.
+     */
+    public function verifyPayment(int $saleId, string $provider, string $paymentRef, int $amountThebe, string $rawBody): array
+    {
+        if ($paymentRef === '' || strlen($paymentRef) > 64) {
+            throw new VendException('BAD_PAYMENT', 'Payment reference missing or too long.');
+        }
+        $r = Db::tx($this->pdo, function () use ($saleId, $provider, $paymentRef, $amountThebe, $rawBody) {
+            $sale = $this->lockSale($saleId);
+            $dup = $this->pdo->prepare('SELECT sale_id, status FROM payments WHERE provider = ? AND payment_ref = ?');
+            $dup->execute([$provider, $paymentRef]);
+            if ($prev = $dup->fetch()) {
+                if ((int) $prev['sale_id'] === $saleId && $prev['status'] === 'verified') {
+                    return $this->sale($saleId); // provider retried the same callback
+                }
+                throw new VendException('PAYMENT_REUSED', 'This payment reference has already been used.', 409);
             }
-            $this->reserveAndQueue($sale, "channel:{$channel['id']}", "Payment received ref $paymentRef");
+            $reason = null;
+            if ($amountThebe !== (int) $sale['amount_thebe']) {
+                $reason = sprintf('Amount paid P%.2f does not match sale amount P%.2f', $amountThebe / 100, $sale['amount_thebe'] / 100);
+            } elseif ($sale['state'] !== SaleState::PAYMENT_PENDING) {
+                $reason = "Sale is {$sale['state']}, not waiting for payment";
+            }
+            $this->pdo->prepare('INSERT INTO payments (sale_id, provider, payment_ref, amount_thebe, status, reason, body_sha256) VALUES (?,?,?,?,?,?,?)')
+                ->execute([$saleId, $provider, $paymentRef, $amountThebe, $reason ? 'rejected' : 'verified', $reason, hash('sha256', $rawBody)]);
+            $this->audit->record($provider, 'payment', $reason ? 'payment.rejected' : 'payment.verified', 'vend_sales', (string) $saleId, null, $reason ?? $paymentRef);
+            if ($reason) {
+                // Commit the rejection record, then report it.
+                return ['__rejected' => $reason];
+            }
+            $this->reserveAndQueue($sale, $provider, "Payment verified: $provider ref $paymentRef, P" . number_format($amountThebe / 100, 2));
             return $this->sale($saleId);
         });
+        if (isset($r['__rejected'])) {
+            throw new VendException('PAYMENT_REJECTED', $r['__rejected'] . '. The payment will be reversed.', 409);
+        }
+        return $r;
     }
 
     public function status(array $channel, int $saleId): array
