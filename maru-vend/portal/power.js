@@ -61,28 +61,54 @@
   // ---------------------------------------------------------------- views
   const views = {};
 
-  views.login = () => {
+  views.login = (arg = '') => {
     chrome(false);
     app.innerHTML = `
       <h1>Welcome to Maru Power</h1>
-      <p class="lead">Every meter you own, every token bought for it, at a till, on USSD or online, in one place.</p>
+      <p class="lead">Every meter you own, every token bought for it, at a till, on USSD or online, in one place. All amounts in Pula (BWP).</p>
       <div class="seg" role="tablist"><button aria-pressed="true" data-m="in">Sign in</button><button aria-pressed="false" data-m="up">Create account</button></div>
       <form class="card" id="f" novalidate>
-        <div id="nameRow" hidden><label for="name">Full name</label><input id="name" name="name" autocomplete="name"></div>
+        <div id="upRows" hidden>
+          <label>Account type</label>
+          <div class="seg" id="types"><button type="button" data-t="household" aria-pressed="true">Household</button><button type="button" data-t="business" aria-pressed="false">Business</button></div>
+          <p class="muted small" id="typeHint"></p>
+          <div id="bizRows" hidden>
+            <label for="cn">Registered company name</label><input id="cn" name="company_name" autocomplete="organization">
+            <label for="cr">Company registration number <small>CIPA UIN, e.g. BW00001234567</small></label><input id="cr" name="company_reg" autocomplete="off">
+            <label for="vat">VAT number <small>BURS, optional</small></label><input id="vat" name="vat_no" autocomplete="off">
+          </div>
+          <label for="name" id="nameLbl">Full name</label><input id="name" name="name" autocomplete="name">
+        </div>
         <label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" required>
         <label for="pw">Password <small id="pwHint" hidden>at least 8 characters</small></label><input id="pw" name="password" type="password" autocomplete="current-password" required>
         <div class="note err" role="alert" hidden></div>
         <button class="btn" type="submit" id="go">Sign in</button>
-      </form>`;
+      </form>
+      <p class="muted small">Maru Power has its own login. Your Maru Quick Supply Portal account does not sign you in here.</p>`;
     let mode = 'in';
-    app.querySelectorAll('.seg button').forEach((b) => b.onclick = () => {
-      mode = b.dataset.m;
-      app.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', x === b));
-      $('#nameRow').hidden = $('#pwHint').hidden = mode === 'in';
-      $('#go').textContent = mode === 'in' ? 'Sign in' : 'Create account';
-      $('#pw').autocomplete = mode === 'in' ? 'current-password' : 'new-password';
-    });
+    let type = 'household';
+    const setType = (t) => {
+      type = t;
+      app.querySelectorAll('#types button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.t === t));
+      $('#bizRows').hidden = t !== 'business';
+      $('#nameLbl').textContent = t === 'business' ? 'Your full name (account administrator)' : 'Full name';
+      $('#typeHint').textContent = t === 'business'
+        ? 'For companies with one or more sites. All meters, spend per site and VAT receipts in one account.'
+        : 'For your home and the homes of family you look after.';
+    };
+    const setMode = (m) => {
+      mode = m;
+      app.querySelectorAll('[data-m]').forEach((x) => x.setAttribute('aria-pressed', x.dataset.m === m));
+      $('#upRows').hidden = $('#pwHint').hidden = m === 'in';
+      $('#go').textContent = m === 'in' ? 'Sign in' : 'Create account';
+      $('#pw').autocomplete = m === 'in' ? 'current-password' : 'new-password';
+    };
+    app.querySelectorAll('[data-m]').forEach((b) => b.onclick = () => setMode(b.dataset.m));
+    app.querySelectorAll('#types button').forEach((b) => b.onclick = () => setType(b.dataset.t));
+    setType(arg === 'signup-business' ? 'business' : 'household');
+    if (arg.startsWith('signup')) setMode('up');
     form($('#f'), async (d) => {
+      if (mode === 'up') d.account_type = type;
       await api('POST', mode === 'in' ? '/login' : '/signup', d);
       me = await api('GET', '/me');
       go(mode === 'in' ? '#/' : '#/link');
@@ -96,7 +122,7 @@
     const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
     const max = Math.max(1, ...d.trend.map((m) => m.kwh));
     app.innerHTML = `
-      <section class="card hero"><h1>${greet}, ${esc(me.name.split(' ')[0])}!</h1>
+      <section class="card hero"><h1>${greet}, ${esc(me.name.split(' ')[0])}!</h1>${me.account_type === 'business' ? `<p class="small"><b>${esc(me.company_name)}</b> · Business account</p>` : ''}
         <a class="pill" href="#/meters">${ic.meter} ${d.meters.length} <span>${d.meters.length === 1 ? 'meter' : 'meters'}</span></a></section>
       <div class="stats">
         ${stat('Spent this month', P(d.month_thebe), 'All meters, all channels', 'wallet', 'ic-green')}
@@ -373,7 +399,7 @@
 
   async function route() {
     const [, name = '', arg] = location.hash.match(/^#\/([a-z]*)\/?(.*)$/) || [];
-    if (name === 'login') return views.login();
+    if (name === 'login') return views.login(decodeURIComponent(arg || ''));
     if (!me) { try { me = await api('GET', '/me'); } catch { return; } }
     chrome(true);
     document.querySelectorAll('.tabbar a').forEach((a) => { if (a.dataset.tab === name) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });

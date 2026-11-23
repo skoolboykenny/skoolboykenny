@@ -134,6 +134,20 @@ final class PortalTest extends TestCase
         $this->assertSame('PAYMENT_PENDING', $this->vend->sale((int) $b['id'])['state']);
     }
 
+    public function testHouseholdAndBusinessAccounts(): void
+    {
+        $h = $this->portal->signup('Neo K', 'neo@example.com', 'secret123');
+        $this->assertSame('household', $this->portal->me($h)['account_type']);
+        $this->assertNull($this->portal->me($h)['company_name']);
+
+        $this->expectCode('BAD_REQUEST', fn () => $this->portal->signup('Boi', 'b1@example.com', 'secret123', 'business', ['company_reg' => 'BW00001234567']));
+        $this->expectCode('BAD_REQUEST', fn () => $this->portal->signup('Boi', 'b2@example.com', 'secret123', 'business', ['company_name' => 'Kgosi Traders']));
+        $b = $this->portal->signup('Boi', 'b3@example.com', 'secret123', 'business', ['company_name' => 'Kgosi Traders (Pty) Ltd', 'company_reg' => 'bw 0000 1234567', 'vat_no' => 'P03123456789']);
+        $me = $this->portal->me($b);
+        $this->assertSame(['business', 'Kgosi Traders (Pty) Ltd', 'BW00001234567', 'P03123456789'], [$me['account_type'], $me['company_name'], $me['company_reg'], $me['vat_no']]);
+        $this->expectCode('BAD_REQUEST', fn () => $this->portal->signup('X', 'x2@example.com', 'secret123', 'wholesale'));
+    }
+
     public function testSignedProviderCallback(): void
     {
         putenv('MV_PAY_SECRET_FNB=shh');

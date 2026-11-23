@@ -933,6 +933,262 @@ footer {
     </div>
 </section>
 
+
+<!-- ================= MARU POWER (added section; separate account and login) ================= -->
+<?php
+/* Maru Power: prepaid electricity, added to this page. Separate login from the Supply Portal.
+   MARU_POWER_URL = where the Maru Power web app runs (Maru Vend). */
+$mpUrl = rtrim(getenv('MARU_POWER_URL') ?: 'http://127.0.0.1:8080/power', '/');
+$mpE = function ($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); };
+$signupHome = $mpE($mpUrl . '#/login/signup-household');
+$signupBiz  = $mpE($mpUrl . '#/login/signup-business');
+$login      = $mpE($mpUrl . '#/login');
+?>
+<style>
+#maru-power {
+    --yellow:#F5C518; --yellow-dk:#D4A900; --yellow-pale:#FFFBEA; --dark:#0E0E0E; --dark2:#1A1A1A;
+    --mid:#6B7280; --light:#F8F7F4; --white:#FFFFFF; --blue:#1A6BFF; --border:#E5E7EB;
+    --red:#E5484D; --red-pale:#FDECEC; --green:#1F9D55; --green-pale:#E6F6EC;
+    --fh:'Sora', sans-serif; --fb:'DM Sans', sans-serif; --max:1280px; --px:clamp(20px, 5vw, 72px);
+    --radius:14px; --radius-lg:24px;
+ font-family:var(--fb); color:var(--dark); line-height:1.6; }
+#maru-power *, #maru-power *::before, #maru-power *::after { box-sizing:border-box; }
+#maru-power a { text-decoration:none; color:inherit; }
+#maru-power .hero { background:var(--yellow); padding:clamp(56px, 7vw, 90px) var(--px) clamp(96px, 10vw, 130px); position:relative; overflow:hidden; }
+#maru-power .hero::before { content:''; position:absolute; top:-80px; right:-80px; width:500px; height:500px; background:rgba(255,255,255,.12); border-radius:50%; }
+#maru-power .hero::after { content:''; position:absolute; bottom:-160px; left:38%; width:420px; height:420px; background:rgba(0,0,0,.04); border-radius:50%; }
+#maru-power .hero-inner { max-width:var(--max); margin:0 auto; display:grid; grid-template-columns:1fr 1.05fr; gap:48px; align-items:center; position:relative; z-index:1; }
+#maru-power .hero-tag { display:inline-flex; align-items:center; gap:7px; background:rgba(0,0,0,.08); padding:6px 14px; border-radius:50px; font-size:.78rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; margin-bottom:20px; }
+#maru-power .hero-tag svg { width:14px; height:14px; }
+#maru-power .hero h1 { font-family:var(--fh); font-size:clamp(2.2rem, 4.8vw, 3.6rem); font-weight:900; line-height:1.08; letter-spacing:-.03em; margin-bottom:20px; }
+#maru-power .hero p { font-size:clamp(1rem, 1.5vw, 1.2rem); color:rgba(14,14,14,.75); max-width:520px; margin-bottom:36px; line-height:1.6; }
+#maru-power .hero-btns { display:flex; gap:14px; flex-wrap:wrap; }
+#maru-power .btn-primary { background:var(--dark); color:var(--white); padding:14px 32px; border-radius:50px; font-weight:700; font-size:.95rem; display:inline-flex; align-items:center; gap:8px; transition:background .2s, transform .2s; }
+#maru-power .btn-primary:hover { background:#222; transform:translateY(-2px); }
+#maru-power .btn-secondary { color:var(--dark); padding:14px 32px; border-radius:50px; font-weight:600; font-size:.95rem; border:2px solid rgba(14,14,14,.35); display:inline-flex; align-items:center; gap:8px; transition:border-color .2s, transform .2s; }
+#maru-power .btn-secondary:hover { border-color:var(--dark); transform:translateY(-2px); }
+#maru-power .mock { background:rgba(255,255,255,.35); border-radius:22px; padding:10px; box-shadow:0 24px 60px rgba(0,0,0,.12); }
+#maru-power .mock-win { display:grid; grid-template-columns:34px 1fr; background:#F2F2EE; border-radius:16px; overflow:hidden; }
+#maru-power .mock-rail { background:var(--dark); display:flex; flex-direction:column; align-items:center; gap:16px; padding:12px 0; }
+#maru-power .mock-rail i { width:18px; height:18px; border-radius:6px; background:#2A2A2A; }
+#maru-power .mock-rail i.mark { background:var(--yellow); border-radius:50%; }
+#maru-power .mock-rail i.on { background:#4A4220; }
+#maru-power .mock-body { padding:12px; }
+#maru-power .mock-top { display:flex; justify-content:space-between; align-items:center; background:#fff; border-radius:10px; padding:8px 12px; margin-bottom:10px; font-family:var(--fh); font-weight:600; font-size:.85rem; }
+#maru-power .mock-top span { display:flex; gap:8px; }
+#maru-power .mock-top span i { width:14px; height:14px; border-radius:50%; background:#D9D9D3; }
+#maru-power .mock-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+#maru-power .m-card { background:#fff; border-radius:10px; padding:12px; }
+#maru-power .m-card h4 { font-family:var(--fh); font-size:.8rem; font-weight:600; }
+#maru-power .m-card small { display:block; color:var(--mid); font-size:.66rem; margin-bottom:6px; }
+#maru-power .m-card svg { width:100%; height:auto; }
+#maru-power .m-row { display:flex; justify-content:space-between; font-size:.68rem; margin-top:6px; }
+#maru-power .m-track { height:6px; border-radius:6px; background:#EEE; position:relative; margin-top:4px; }
+#maru-power .m-track b { position:absolute; inset:0 30% 0 0; border-radius:6px; background:linear-gradient(90deg, #F26B3A, var(--yellow)); }
+#maru-power .m-tip { display:flex; gap:8px; align-items:center; background:var(--yellow-pale); border-radius:8px; padding:8px; margin-top:10px; font-size:.66rem; }
+#maru-power .m-tip b { display:block; font-size:.68rem; }
+#maru-power .m-mini { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+#maru-power .m-alert { background:var(--red-pale); border:1px solid #F7C6C7; }
+#maru-power .m-save { background:var(--green-pale); border:1px solid #BFE6CC; }
+#maru-power .m-save .v { font-family:var(--fh); font-size:1.05rem; font-weight:800; }
+#maru-power .dot { display:inline-flex; align-items:center; gap:4px; font-size:.62rem; background:rgba(31,157,85,.12); color:var(--green); padding:2px 8px; border-radius:20px; margin-top:6px; }
+#maru-power .legend { display:flex; gap:10px; font-size:.6rem; color:var(--mid); margin-top:4px; }
+#maru-power .legend i { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:3px; vertical-align:middle; }
+#maru-power .band { max-width:var(--max); margin:-64px auto 0; padding:0 var(--px); position:relative; z-index:2; }
+#maru-power .band-in { background:var(--dark); color:#fff; border-radius:22px; padding:30px 36px; display:flex; gap:24px; align-items:center; }
+#maru-power .band-in svg { width:56px; height:56px; color:var(--yellow); flex:none; }
+#maru-power .band-in h2 { font-family:var(--fh); font-size:clamp(1.2rem, 2.2vw, 1.7rem); font-weight:700; }
+#maru-power .band-in p { color:#9CA3AF; font-size:clamp(.95rem, 1.4vw, 1.15rem); }
+#maru-power .section { padding:clamp(64px, 8vw, 96px) var(--px); }
+#maru-power .section-inner { max-width:var(--max); margin:0 auto; }
+#maru-power .section-label { display:inline-block; background:var(--yellow-pale); color:var(--yellow-dk); padding:5px 14px; border-radius:50px; font-size:.75rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; margin-bottom:16px; }
+#maru-power .section-title { font-family:var(--fh); font-size:clamp(1.7rem, 3vw, 2.6rem); font-weight:800; letter-spacing:-.03em; margin-bottom:14px; max-width:640px; }
+#maru-power .section-sub { font-size:1rem; color:var(--mid); max-width:560px; line-height:1.7; margin-bottom:48px; }
+#maru-power .plans { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+#maru-power .plan { border:1.5px solid var(--border); border-radius:var(--radius-lg); padding:34px 30px; background:var(--light); display:flex; flex-direction:column; }
+#maru-power .plan.biz { background:var(--dark); color:#fff; border-color:var(--dark); }
+#maru-power .plan .ic { width:52px; height:52px; border-radius:14px; background:var(--yellow); display:grid; place-items:center; margin-bottom:18px; }
+#maru-power .plan .ic svg { width:24px; height:24px; color:var(--dark); }
+#maru-power .plan h3 { font-family:var(--fh); font-size:1.35rem; font-weight:800; margin-bottom:6px; }
+#maru-power .plan > p { color:var(--mid); margin-bottom:20px; }
+#maru-power .plan.biz > p { color:#9CA3AF; }
+#maru-power .plan ul { list-style:none; display:grid; gap:10px; margin-bottom:28px; }
+#maru-power .plan li { display:flex; gap:10px; font-size:.92rem; }
+#maru-power .plan li svg { width:18px; height:18px; flex:none; color:var(--yellow-dk); margin-top:3px; }
+#maru-power .plan.biz li svg { color:var(--yellow); }
+#maru-power .plan .btn-primary { margin-top:auto; align-self:flex-start; }
+#maru-power .plan.biz .btn-primary { background:var(--yellow); color:var(--dark); }
+#maru-power .plan.biz .btn-primary:hover { background:var(--yellow-dk); }
+#maru-power .amounts { display:flex; flex-wrap:wrap; gap:8px; margin:-8px 0 22px; }
+#maru-power .amounts span { background:#fff; border:1px solid var(--border); border-radius:50px; padding:4px 12px; font-weight:700; font-size:.82rem; }
+#maru-power .plan.biz .amounts span { background:#1F1F1F; border-color:#333; color:#fff; }
+#maru-power .how-section { background:var(--dark); padding:clamp(64px, 8vw, 96px) var(--px); }
+#maru-power .how-section .section-label { background:rgba(245,197,24,.15); color:var(--yellow); }
+#maru-power .how-section .section-title { color:#fff; }
+#maru-power .how-section .section-sub { color:#9CA3AF; }
+#maru-power .steps-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; }
+#maru-power .step { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07); border-radius:var(--radius); padding:28px 22px; text-align:center; }
+#maru-power .step-num { width:48px; height:48px; background:var(--yellow); border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:var(--fh); font-weight:800; font-size:1.1rem; margin:0 auto 18px; }
+#maru-power .step h3 { font-family:var(--fh); font-size:.95rem; font-weight:700; color:#fff; margin-bottom:8px; }
+#maru-power .step p { font-size:.84rem; color:#9CA3AF; line-height:1.6; }
+#maru-power .why-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:24px; }
+#maru-power .why-card { background:var(--light); border:1px solid var(--border); border-radius:var(--radius-lg); padding:30px 26px; }
+#maru-power .why-icon { width:48px; height:48px; background:var(--yellow); border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:18px; }
+#maru-power .why-icon svg { width:22px; height:22px; }
+#maru-power .why-card h3 { font-family:var(--fh); font-size:1rem; font-weight:700; margin-bottom:8px; }
+#maru-power .why-card p { font-size:.88rem; color:var(--mid); }
+#maru-power .cta-section { background:var(--yellow); padding:clamp(64px, 8vw, 96px) var(--px); text-align:center; }
+#maru-power .cta-inner { max-width:660px; margin:0 auto; }
+#maru-power .cta-section h2 { font-family:var(--fh); font-size:clamp(1.8rem, 3.5vw, 2.8rem); font-weight:900; letter-spacing:-.03em; margin-bottom:16px; }
+#maru-power .cta-section p { color:rgba(14,14,14,.7); margin-bottom:32px; }
+#maru-power .cta-btns { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+@media (max-width:1024px) {
+#maru-power .why-grid { grid-template-columns:repeat(2, 1fr); }
+#maru-power .steps-grid { grid-template-columns:repeat(2, 1fr); }
+#maru-power .hero-inner { grid-template-columns:1fr; }
+}
+@media (max-width:768px) {
+#maru-power .plans, #maru-power .why-grid, #maru-power .steps-grid, #maru-power .footer-top { grid-template-columns:1fr; }
+#maru-power .mock-grid { grid-template-columns:1fr; }
+#maru-power .band-in { flex-direction:column; text-align:center; padding:26px 22px; }
+}
+@keyframes mpFadeUp{ from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:none; } }
+#maru-power .hero-text { animation:mpFadeUp .6s ease both; }
+#maru-power .mock { animation:mpFadeUp .6s .15s ease both; }
+@media (prefers-reduced-motion:reduce) {
+#maru-power .hero-text, #maru-power .mock { animation:none; }
+}
+</style>
+<div id="maru-power">
+<section class="hero">
+    <div class="hero-inner">
+        <div class="hero-text">
+            <div class="hero-tag"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>Maru Power</div>
+            <h1>Power Your World, Smart &amp; Simplified</h1>
+            <p>Run your business with the best analytics, manage consumption for your household — all on one platform. Buy BPC prepaid electricity in Pula and see every token for every meter you own.</p>
+            <div class="hero-btns">
+                <a href="#mp-plans" class="btn-primary"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>Sign Up Now</a>
+                <a href="#mp-how" class="btn-secondary"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>Explore the Platform</a>
+            </div>
+        </div>
+
+        <div class="mock" aria-label="Example Maru Power dashboard" role="img">
+            <div class="mock-win">
+                <div class="mock-rail"><i class="mark"></i><i></i><i class="on"></i><i></i><i></i></div>
+                <div class="mock-body">
+                    <div class="mock-top">Smart power dashboard <span><i></i><i></i><i></i></span></div>
+                    <div class="mock-grid">
+                        <div class="m-card">
+                            <h4>Household Analytics</h4><small>Daily household energy use (kWh)</small>
+                            <svg viewBox="0 0 220 70" fill="none"><defs><linearGradient id="mpg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A6BFF" stop-opacity=".25"/><stop offset="1" stop-color="#1A6BFF" stop-opacity="0"/></linearGradient></defs>
+                                <path d="M0 50 C20 20 35 60 55 40 S90 30 105 10 S130 60 150 35 S185 55 200 30 S215 25 220 20 V70 H0Z" fill="url(#mpg)"/>
+                                <path d="M0 50 C20 20 35 60 55 40 S90 30 105 10 S130 60 150 35 S185 55 200 30 S215 25 220 20" stroke="#1A6BFF" stroke-width="2"/></svg>
+                            <div class="m-row"><b>Average daily spend</b></div>
+                            <div class="m-track"><b></b></div>
+                            <div class="m-row"><span>This month</span><b>P25.00 / day</b></div>
+                            <div class="m-tip">💡<div><b>Saving tip</b>Run the geyser off-peak to save about P180.00 a month</div></div>
+                        </div>
+                        <div>
+                            <div class="m-card">
+                                <h4>Business Analytics</h4><small>Spend per site this week (P)</small>
+                                <svg viewBox="0 0 220 80"><g fill="#1A6BFF"><rect x="8" y="30" width="7" height="45"/><rect x="40" y="32" width="7" height="43"/><rect x="72" y="28" width="7" height="47"/><rect x="104" y="8" width="7" height="67"/><rect x="136" y="16" width="7" height="59"/><rect x="168" y="22" width="7" height="53"/></g>
+                                <g fill="#F26B3A"><rect x="16" y="40" width="7" height="35"/><rect x="48" y="42" width="7" height="33"/><rect x="80" y="46" width="7" height="29"/><rect x="112" y="18" width="7" height="57"/><rect x="144" y="34" width="7" height="41"/><rect x="176" y="40" width="7" height="35"/></g>
+                                <g fill="#F5C518"><rect x="24" y="56" width="7" height="19"/><rect x="56" y="56" width="7" height="19"/><rect x="88" y="54" width="7" height="21"/><rect x="120" y="44" width="7" height="31"/><rect x="152" y="50" width="7" height="25"/><rect x="184" y="48" width="7" height="27"/></g></svg>
+                                <div class="legend"><span><i style="background:#1A6BFF"></i>Head office</span><span><i style="background:#F26B3A"></i>Branch</span><span><i style="background:#F5C518"></i>Warehouse</span></div>
+                            </div>
+                            <div class="m-mini">
+                                <div class="m-card m-alert"><h4>Low units</h4><small>Branch, Mogoditshane</small><span class="dot">● Auto top-up P500.00</span></div>
+                                <div class="m-card m-save"><h4>Saved this month</h4><div class="v">P1,590.00</div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="band"><div class="band-in">
+    <svg fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/><circle cx="3" cy="5" r="1.4"/><circle cx="21" cy="5" r="1.4"/><circle cx="3" cy="19" r="1.4"/><circle cx="21" cy="19" r="1.4"/><path d="M4.2 5.8 8 9M19.8 5.8 16 9M4.2 18.2 8 15M19.8 18.2 16 15"/></svg>
+    <div><h2>🔋 Transforming Power across Botswana —</h2><p>Optimise consumption, cut costs, and manage your electricity seamlessly.</p></div>
+</div></div>
+
+<section class="section" id="mp-plans">
+    <div class="section-inner">
+        <span class="section-label">Create your account</span>
+        <h2 class="section-title">One platform, two kinds of account</h2>
+        <p class="section-sub">Your Maru Power login is separate from your Supply Portal login. Pick the account that fits you; every amount is in Pula (BWP).</p>
+        <div class="plans">
+            <div class="plan">
+                <div class="ic"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></div>
+                <h3>Household account</h3>
+                <p>For your home, and the homes of family you look after.</p>
+                <div class="amounts"><span>P20</span><span>P50</span><span>P100</span><span>P200</span><span>P500</span></div>
+                <ul>
+                    <li><svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Buy tokens from P10, any time of day</li>
+                    <li><svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Every token kept, even ones bought at a Maru till or on USSD</li>
+                    <li><svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Monthly spend in Pula and an appliance cost calculator</li>
+                    <li><svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Share a meter with family members</li>
+                </ul>
+                <a href="<?= $signupHome ?>" class="btn-primary">Create household account</a>
+            </div>
+            <div class="plan biz">
+                <div class="ic"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l2-5h14l2 5M4 9v11h16V9M3 9h18M9 20v-6h6v6"/></svg></div>
+                <h3>Business account</h3>
+                <p>For shops, offices, clinics and landlords with many sites and meters.</p>
+                <div class="amounts"><span>P500</span><span>P1,000</span><span>P2,500</span><span>P5,000</span></div>
+                <ul>
+                    <li><svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>All sites and meters under one company account</li>
+                    <li><svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Spend per site in Pula, with receipts showing VAT</li>
+                    <li><svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Give staff and tenants access to the meters they use</li>
+                    <li><svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Registered with your CIPA number; BURS VAT number optional</li>
+                </ul>
+                <a href="<?= $signupBiz ?>" class="btn-primary">Create business account</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="how-section" id="mp-how">
+    <div class="section-inner">
+        <span class="section-label">How it works</span>
+        <h2 class="section-title">From payment to token, every step checked</h2>
+        <p class="section-sub">Each purchase is confirmed before your token is issued, so your money is never lost and a token is never issued twice.</p>
+        <div class="steps-grid">
+            <div class="step"><div class="step-num">1</div><h3>Link your meters</h3><p>Use the receipt and token from any purchase slip, or verify the phone number your tokens are sent to.</p></div>
+            <div class="step"><div class="step-num">2</div><h3>Choose an amount</h3><p>Enter an amount in Pula. We check the meter with BPC and show you the name on it before you pay.</p></div>
+            <div class="step"><div class="step-num">3</div><h3>Pay securely</h3><p>Pay with Orange Money, MyZaka, Smega or card. Your payment is confirmed for the exact amount before anything else happens.</p></div>
+            <div class="step"><div class="step-num">4</div><h3>Get your token</h3><p>BPC issues the token. You see it on screen, get it by SMS, and it stays in your account with its receipt.</p></div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-inner">
+        <span class="section-label">Why Maru Power</span>
+        <h2 class="section-title">Electricity you can see and trust</h2>
+        <div class="why-grid">
+            <div class="why-card"><div class="why-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div><h3>Every purchase verified</h3><p>See proof that your payment arrived, the money went to BPC, and your token was issued.</p></div>
+            <div class="why-card"><div class="why-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 14l4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg></div><h3>All your meters, one place</h3><p>Home, rental units, shop or branch — every meter and every token, wherever it was bought.</p></div>
+            <div class="why-card"><div class="why-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><h3>Priced in Pula</h3><p>Amounts, receipts, VAT and monthly spend are all shown in BWP, with BPC's tariff on every receipt.</p></div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <div class="cta-inner">
+        <h2>Ready to take control of your power?</h2>
+        <p>Create a free Maru Power account for your home or business. Already have one? Log in to buy tokens and see your meters.</p>
+        <div class="cta-btns">
+            <a href="#mp-plans" class="btn-primary">Create an account</a>
+            <a href="<?= $login ?>" class="btn-secondary">Log in to Maru Power</a>
+        </div>
+    </div>
+</section>
+
+</div>
+<!-- ================= END MARU POWER ================= -->
+
 <!-- FOOTER -->
 <style>
 /* --- MaruQuick app casing: phone-only fixed bottom tab bar --- */
