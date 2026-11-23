@@ -920,10 +920,10 @@ footer {
 <!-- CTA -->
 <section class="cta-section">
     <div class="cta-inner">
-        <h2>Ready to stock smarter?</h2>
-        <p>Join over 100 Botswana businesses already ordering wholesale through Maru Quick. Sign up free and place your first order today.</p>
+        <h2>Track your electricity spend</h2>
+        <p>Join other Botswana businesses and individuals using Maru Quick to power their businesses and households.</p>
         <div class="cta-btns">
-            <a href="signup.php" class="btn-primary">
+            <a href="#mp-plans" class="btn-primary">
                 Get Started Free
             </a>
             <a href="contact.php" class="btn-secondary">
@@ -1063,7 +1063,7 @@ $login      = 'maru_power_login.php';
         <div class="hero-text">
             <div class="hero-tag"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>Maru Power</div>
             <h1>Power Your World, Smart &amp; Simplified</h1>
-            <p>Run your business with the best analytics, manage consumption for your household — all on one platform. Buy BPC prepaid electricity in Pula and see every token for every meter you own.</p>
+            <p>Run your business with the best analytics, manage consumption for your household — all on one platform. Buy prepaid electricity and see every token for every meter you own.</p>
             <div class="hero-btns">
                 <a href="#mp-plans" class="btn-primary"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>Sign Up Now</a>
                 <a href="#mp-how" class="btn-secondary"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>Explore the Platform</a>
@@ -1154,9 +1154,9 @@ $login      = 'maru_power_login.php';
         <p class="section-sub">Each purchase is confirmed before your token is issued, so your money is never lost and a token is never issued twice.</p>
         <div class="steps-grid">
             <div class="step"><div class="step-num">1</div><h3>Link your meters</h3><p>Use the receipt and token from any purchase slip, or verify the phone number your tokens are sent to.</p></div>
-            <div class="step"><div class="step-num">2</div><h3>Choose an amount</h3><p>Enter an amount in Pula. We check the meter with BPC and show you the name on it before you pay.</p></div>
-            <div class="step"><div class="step-num">3</div><h3>Pay securely</h3><p>Pay with Orange Money, MyZaka, Smega or card. Your payment is confirmed for the exact amount before anything else happens.</p></div>
-            <div class="step"><div class="step-num">4</div><h3>Get your token</h3><p>BPC issues the token. You see it on screen, get it by SMS, and it stays in your account with its receipt.</p></div>
+            <div class="step"><div class="step-num">2</div><h3>Choose an amount</h3><p>Enter how much you want to spend. We confirm your meter details before you pay.</p></div>
+            <div class="step"><div class="step-num">3</div><h3>Pay securely</h3><p>Pay with Orange Money, MyZaka, Smega, card, or cash at a Maru Quick till. Your payment is confirmed for the exact amount before anything else happens.</p></div>
+            <div class="step"><div class="step-num">4</div><h3>Get your token</h3><p>A token is issued. You see it on screen, get it by SMS, and it stays in your account with its receipt.</p></div>
         </div>
     </div>
 </section>
@@ -1166,9 +1166,9 @@ $login      = 'maru_power_login.php';
         <span class="section-label">Why Maru Power</span>
         <h2 class="section-title">Electricity you can see and trust</h2>
         <div class="why-grid">
-            <div class="why-card"><div class="why-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div><h3>Every purchase verified</h3><p>See proof that your payment arrived, the money went to BPC, and your token was issued.</p></div>
+            <div class="why-card"><div class="why-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div><h3>Every purchase verified</h3><p>See each step of every purchase: your payment received and confirmed for the exact amount, and your token issued, all recorded in your account.</p></div>
             <div class="why-card"><div class="why-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 14l4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></svg></div><h3>All your meters, one place</h3><p>Home, rental units, shop or branch — every meter and every token, wherever it was bought.</p></div>
-            <div class="why-card"><div class="why-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><h3>Priced in Pula</h3><p>Amounts, receipts, VAT and monthly spend are all shown in BWP, with BPC's tariff on every receipt.</p></div>
+            <div class="why-card"><div class="why-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><h3>Priced in Pula</h3><p>Amounts, receipts, VAT and monthly spend are all shown in BWP, with the full cost breakdown on every receipt.</p></div>
         </div>
     </div>
 </section>
