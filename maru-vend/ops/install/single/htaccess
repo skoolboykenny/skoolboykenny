@@ -1,0 +1,12 @@
+# Maru Power in public_html/maru-power. Every request goes through index.php, so app.phar,
+# mv.php and the settings file (.env.php) can never be opened or run from a browser.
+Options -Indexes
+DirectoryIndex index.php
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{ENV:REDIRECT_STATUS} ^$
+    RewriteRule ^ index.php [L,QSA]
+</IfModule>
+<FilesMatch "^(\.env\.php|\.env\.php\.example|mv\.php|app\.phar)$">
+    Require all denied
+</FilesMatch>
