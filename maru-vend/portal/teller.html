@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#F5C518">
+<meta name="robots" content="noindex">
+<title>Maru Quick Teller</title>
+<link rel="icon" href="/teller/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/teller/teller.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><img src="/teller/logo.svg" alt="" width="32" height="32"><span><b>Maru Quick</b> Teller</span></div>
+  <div class="who" id="who" hidden><span id="whoName"></span><span class="outlet" id="whoOutlet"></span><button class="link" id="logout">Sign out</button></div>
+</header>
+<div class="banner" id="testBanner" hidden>TEST MODE: tokens are test tokens and will not load on a real meter.</div>
+<div class="layout">
+  <nav class="tabs" id="tabs" hidden>
+    <a href="#/sell" data-v="sell">Sell</a>
+    <a href="#/reprint" data-v="reprint">Reprint</a>
+    <a href="#/shift" data-v="shift">My shift</a>
+    <a href="#/outlet" data-v="outlet" class="mgr" hidden>Outlet today</a>
+    <a href="#/tellers" data-v="tellers" class="mgr" hidden>Tellers</a>
+    <a href="#/pin" data-v="pin">Change PIN</a>
+  </nav>
+  <main id="app"><div class="spinner"></div></main>
+</div>
+<div id="slip" class="slip" aria-hidden="true"></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<script src="/teller/teller.js"></script>
+</body>
+</html>

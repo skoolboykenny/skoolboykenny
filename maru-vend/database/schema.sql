@@ -352,3 +352,20 @@ CREATE TABLE IF NOT EXISTS portal_sso_nonces (
   user_id  BIGINT NOT NULL,
   used_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
 ) ENGINE=InnoDB;
+
+-- Teller portal: cashiers at Maru Quick outlets (src/Teller). Each sells through the outlet's POS channel.
+CREATE TABLE IF NOT EXISTS tellers (
+  id             INT AUTO_INCREMENT PRIMARY KEY,
+  merchant_id    INT NOT NULL,
+  username       VARCHAR(40) NOT NULL UNIQUE,
+  name           VARCHAR(120) NOT NULL,
+  role           ENUM('teller','manager') NOT NULL DEFAULT 'teller',
+  pin_hash       VARCHAR(255) NOT NULL,
+  active         TINYINT(1) NOT NULL DEFAULT 1,
+  failed_logins  INT NOT NULL DEFAULT 0,
+  locked_until   DATETIME(6) NULL,
+  last_login_at  DATETIME(6) NULL,
+  created_at     DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (merchant_id) REFERENCES merchants(id)
+) ENGINE=InnoDB;
+ALTER TABLE vend_sales ADD COLUMN IF NOT EXISTS teller_id INT NULL AFTER portal_user_id;

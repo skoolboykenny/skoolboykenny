@@ -11,6 +11,7 @@ use MaruVend\Api\ApiApp;
 use MaruVend\App;
 use MaruVend\Dashboard\Dashboard;
 use MaruVend\Portal\PortalWeb;
+use MaruVend\Teller\TellerWeb;
 
 $factory = fn (?string $ip) => App::boot($ip);
 $slim = ApiApp::create($factory);
@@ -18,6 +19,7 @@ $slim = ApiApp::create($factory);
 $slim->setBasePath(rtrim((string) getenv('MV_BASE_PATH'), '/'));
 Dashboard::register($slim, $factory);
 PortalWeb::register($slim, $factory);
+TellerWeb::register($slim, $factory);
 // Unknown addresses get a plain "Not found"; errors never show code or file paths to visitors.
 $errors = $slim->addErrorMiddleware(false, true, false);
 $errors->setDefaultErrorHandler(function (\Psr\Http\Message\ServerRequestInterface $req, \Throwable $e) use ($slim) {

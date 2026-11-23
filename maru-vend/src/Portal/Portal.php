@@ -242,6 +242,13 @@ final class Portal
         return $this->meter($uid, $s['meter_number']);
     }
 
+    /** A teller attached a completed sale to this account: add its meter. @return 'linked'|'already'|'taken' */
+    public function linkFromSale(int $uid, array $sale): string
+    {
+        $r = Db::tx($this->pdo(), fn () => $this->link($uid, $sale['meter_number'], 'teller', (string) $sale['id'], $sale['customer_name'] ?? null));
+        return $r === true ? 'linked' : ($r === false ? 'already' : 'taken');
+    }
+
     /** @return bool|string true = linked, false = already linked to this user, 'taken' = another owner */
     private function link(int $uid, string $meter, string $how, ?string $proof, ?string $customerName, string $label = '', string $siteType = 'home'): bool|string
     {
