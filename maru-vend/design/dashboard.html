@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>No Name Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   TOKENS
+   ============================================================ */
+:root{
+  --white:#FFFFFF;
+  --ink:#0E0E0E;
+  --yellow:#F5C518;
+  --yellow-soft:#FDF3CE;
+  --blue:#1A6BFF;
+  --blue-soft:#E7EFFF;
+
+  --bg:#F4F4F1;
+  --panel:#FFFFFF;
+  --panel-2:#FAFAF8;
+  --line:#E9E9E4;
+  --text:#0E0E0E;
+  --text-2:#6E6E68;
+  --text-3:#9C9C95;
+  --chip:#F2F2EE;
+  --shadow:0 1px 2px rgba(14,14,14,.04), 0 14px 34px rgba(14,14,14,.06);
+  --shadow-lift:0 2px 6px rgba(14,14,14,.06), 0 22px 46px rgba(14,14,14,.12);
+
+  --r-lg:28px;
+  --r-md:20px;
+  --r-sm:12px;
+  --gap:18px;
+  --sidebar:228px;
+  --rail:72px;
+  --pill:999px;
+  --ease:cubic-bezier(.66,0,.24,1);
+}
+body.rail{--sidebar:var(--rail)}
+html[data-theme="dark"]{
+  --bg:#0B0B0A;
+  --panel:#151513;
+  --panel-2:#1B1B18;
+  --line:#28281F;
+  --text:#F5F5F0;
+  --text-2:#9E9E95;
+  --text-3:#71716A;
+  --chip:#201F1C;
+  --white:#151513;
+  --yellow-soft:#2A2410;
+  --blue-soft:#111C33;
+  --shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.45);
+  --shadow-lift:0 2px 8px rgba(0,0,0,.6), 0 26px 54px rgba(0,0,0,.6);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:"DM Sans",system-ui,"Segoe UI",Roboto,sans-serif;
+  font-size:14px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+  transition:background .5s ease, color .5s ease;
+}
+h1,h2,h3,h4,.num{font-family:"Sora",system-ui,sans-serif;letter-spacing:-.02em}
+button,input{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer}
+svg{display:block}
+
+::selection{background:var(--yellow);color:#0E0E0E}
+
+/* ============================================================
+   ENTRANCE MOTION
+   ============================================================ */
+.reveal{opacity:0;transform:translateY(18px)}
+body.ready .reveal{animation:rise .78s cubic-bezier(.22,.85,.25,1) forwards;animation-delay:var(--d,0s)}
+@keyframes rise{to{opacity:1;transform:translateY(0)}}
+
+.slide-l{opacity:0;transform:translateX(-26px)}
+body.ready .slide-l{animation:slideL .8s cubic-bezier(.22,.85,.25,1) forwards;animation-delay:var(--d,0s)}
+@keyframes slideL{to{opacity:1;transform:translateX(0)}}
+
+.fade{opacity:0}
+body.ready .fade{animation:fadeIn .9s ease forwards;animation-delay:var(--d,0s)}
+@keyframes fadeIn{to{opacity:1}}
+
+/* ============================================================
+   SHELL
+   ============================================================ */
+.shell{display:flex;min-height:100%;padding:16px;gap:16px}
+
+/* ---------- sidebar ---------- */
+.side{
+  width:var(--sidebar);flex:0 0 var(--sidebar);
+  background:var(--panel);border:1px solid var(--line);border-radius:36px;
+  padding:18px 12px;display:flex;flex-direction:column;gap:20px;
+  position:sticky;top:16px;height:calc(100vh - 32px);
+  z-index:30;
+  box-shadow:var(--shadow);overflow:visible;
+  transition:width .55s var(--ease),flex-basis .55s var(--ease),padding .55s var(--ease),
+             background .5s ease,border-color .5s ease,box-shadow .5s ease,transform .55s var(--ease);
+}
+.side-top{display:flex;align-items:center;padding:0 5px;transition:padding .5s var(--ease)}
+.side-name{display:none;font-family:"Sora";font-size:15px;font-weight:600;letter-spacing:-.03em;white-space:nowrap}
+@keyframes navIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
+.mark{
+  width:34px;height:34px;border-radius:50%;background:var(--yellow);
+  display:grid;place-items:center;color:#0E0E0E;flex:0 0 34px;
+  box-shadow:0 6px 16px rgba(245,197,24,.4);
+}
+
+.nav-label{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);padding:0 10px;margin-bottom:8px;font-weight:500}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{
+  display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:var(--pill);
+  color:var(--text-2);text-decoration:none;font-weight:500;font-size:13.5px;
+  position:relative;
+  transition:color .22s ease,background .22s ease,transform .22s ease,
+             gap .5s var(--ease),padding .5s var(--ease);
+}
+.nav a .lbl{
+  display:inline-block;overflow:hidden;white-space:nowrap;max-width:160px;
+  transition:max-width .5s var(--ease),opacity .28s ease;
+}
+.nav a svg{opacity:.85;transition:transform .35s cubic-bezier(.3,1.4,.5,1)}
+.nav a:hover{color:var(--text);background:var(--chip);transform:translateX(3px)}
+.nav a:hover svg{transform:scale(1.12) rotate(-4deg)}
+.nav a.on{background:var(--yellow);color:#0E0E0E;font-weight:700}
+.nav a.on svg{opacity:1}
+.nav a.on::after{
+  content:"";position:absolute;left:-12px;top:50%;transform:translateY(-50%);
+  width:4px;height:20px;border-radius:0 4px 4px 0;background:var(--ink);
+}
+html[data-theme="dark"] .nav a.on::after{background:var(--yellow)}
+.tag{margin-left:auto;background:#0E0E0E;color:#fff;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:20px;font-family:"Sora"}
+.nav a.on .tag{background:#0E0E0E;color:var(--yellow)}
+html[data-theme="dark"] .tag{background:var(--yellow);color:#0E0E0E}
+
+.promo{
+  margin-top:auto;background:var(--ink);color:#fff;border-radius:26px;padding:18px 16px 16px;
+  position:relative;overflow:hidden;
+}
+.promo::before{
+  content:"";position:absolute;width:150px;height:150px;right:-58px;top:-58px;border-radius:50%;
+  background:radial-gradient(circle at 40% 40%,rgba(245,197,24,.55),transparent 70%);
+  animation:orbit 9s ease-in-out infinite;
+}
+@keyframes orbit{50%{transform:translate(-14px,16px) scale(1.14)}}
+.promo b{display:block;font-family:"Sora";font-size:15px;font-weight:600;margin-bottom:5px;position:relative}
+.promo p{font-size:12.5px;color:#B9B9B2;margin-bottom:14px;position:relative}
+.promo button{
+  width:100%;background:var(--yellow);color:#0E0E0E;font-weight:700;font-size:13px;
+  padding:10px;border-radius:var(--pill);position:relative;transition:transform .25s ease,box-shadow .25s ease;
+}
+.promo button:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(245,197,24,.35)}
+
+/* ============================================================
+   COLLAPSED RAIL STATE
+   ============================================================ */
+body.rail .side{padding:12px;gap:16px}
+body.rail .side-top{justify-content:center;padding:0}
+body.rail .nav a{justify-content:center;gap:0;padding:0;width:48px;height:48px;margin:0 auto;border-radius:50%}
+body.rail .nav a .lbl{max-width:0;opacity:0}
+body.rail .nav a:hover{transform:translateY(-2px)}
+body.rail .nav a.on::after{display:none}
+
+/* section headings become hairlines */
+body.rail .nav-label{
+  height:1px;padding:0;margin:0 14px 12px;overflow:hidden;
+  color:transparent;background:var(--line);border-radius:1px;
+}
+
+/* the badge shrinks into a dot */
+body.rail .tag{
+  position:absolute;top:7px;right:9px;margin:0;padding:0;
+  width:8px;height:8px;border-radius:50%;font-size:0;
+}
+
+/* hover labels */
+body.rail .nav a::before,
+body.rail .promo-mini::before{
+  content:attr(data-tip);
+  position:absolute;left:calc(100% + 12px);top:50%;
+  transform:translateY(-50%) translateX(-6px);
+  background:var(--ink);color:#fff;font-family:"Sora";font-size:12px;font-weight:600;
+  padding:7px 12px;border-radius:var(--pill);white-space:nowrap;letter-spacing:-.01em;
+  opacity:0;pointer-events:none;z-index:150;
+  box-shadow:0 10px 24px rgba(14,14,14,.24);
+  transition:opacity .2s ease,transform .28s var(--ease);
+}
+body.rail .nav a:hover::before,
+body.rail .promo-mini:hover::before{opacity:1;transform:translateY(-50%) translateX(0)}
+html[data-theme="dark"] body.rail .nav a::before,
+html[data-theme="dark"] body.rail .promo-mini::before{background:var(--yellow);color:#0E0E0E}
+
+/* promo swaps for a single bubble */
+.promo{transition:opacity .3s ease,transform .4s var(--ease)}
+.promo-mini{
+  display:none;position:relative;margin:auto auto 0;width:48px;height:48px;border-radius:50%;
+  background:var(--yellow);color:#0E0E0E;place-items:center;flex:0 0 48px;
+  box-shadow:0 8px 20px rgba(245,197,24,.34);
+  transition:transform .3s cubic-bezier(.3,1.4,.5,1),box-shadow .3s ease;
+}
+.promo-mini:hover{transform:translateY(-3px) scale(1.05)}
+body.rail .promo{display:none}
+body.rail .promo-mini{display:grid}
+
+/* hamburger */
+.hamb{flex:0 0 38px}
+.hamb svg{transition:transform .5s var(--ease)}
+body.rail .hamb svg{transform:rotate(90deg)}
+
+/* mobile overlay backdrop */
+.backdrop{
+  position:fixed;inset:0;background:rgba(14,14,14,.5);backdrop-filter:blur(3px);
+  opacity:0;pointer-events:none;z-index:40;transition:opacity .45s ease;
+}
+
+/* ============================================================
+   SPLASH
+   ============================================================ */
+.splash{
+  position:fixed;inset:0;z-index:200;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  transition:opacity .5s ease,visibility .5s ease;
+}
+.splash.done{opacity:0;visibility:hidden}
+.splash .mark{width:56px;height:56px;border-radius:50%;flex:none}
+.splash .mark svg{width:26px;height:26px}
+.splash b{font-family:"Sora";font-size:19px;font-weight:600;letter-spacing:-.03em;margin-top:2px}
+.splash small{color:var(--text-3);font-size:12px}
+.splash-bar{width:168px;height:3px;border-radius:3px;background:var(--line);overflow:hidden}
+.splash-bar i{display:block;height:100%;width:0;background:var(--ink);border-radius:3px;transition:width .35s linear}
+html[data-theme="dark"] .splash-bar i{background:var(--yellow)}
+
+/* ---------- main column ---------- */
+.main{flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--gap)}
+
+.topbar{
+  display:flex;align-items:center;gap:14px;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 16px;
+  box-shadow:var(--shadow);transition:background .5s ease,border-color .5s ease;
+}
+.search{
+  flex:1;display:flex;align-items:center;gap:10px;background:var(--panel-2);
+  border:1px solid transparent;border-radius:var(--pill);padding:9px 14px;max-width:420px;
+  transition:border-color .3s ease,background .3s ease;
+}
+.search:focus-within{border-color:var(--yellow);background:var(--panel)}
+.search input{border:0;outline:0;background:none;width:100%;font-size:13.5px}
+.search input::placeholder{color:var(--text-3)}
+.kbd{font-family:"Sora";font-size:11px;color:var(--text-3);background:var(--chip);border-radius:var(--pill);padding:2.5px 7px;white-space:nowrap}
+
+.tools{display:flex;align-items:center;gap:6px;margin-left:auto}
+.icon-btn{
+  width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:var(--text-2);
+  position:relative;transition:background .22s ease,color .22s ease,transform .22s ease;
+}
+.icon-btn:hover{background:var(--chip);color:var(--text);transform:translateY(-2px)}
+/* phone only controls, kept off wide screens */
+.icon-btn.topmenu,.icon-btn.searchbtn{display:none}
+.dot{position:absolute;top:8px;right:9px;width:7px;height:7px;border-radius:50%;background:var(--blue);border:2px solid var(--panel)}
+.dot.warn{background:var(--yellow)}
+
+.who{display:flex;align-items:center;gap:10px;padding-left:12px;margin-left:6px;border-left:1px solid var(--line)}
+.avatar{width:38px;height:38px;border-radius:50%;overflow:hidden;flex:0 0 38px;position:relative;background:var(--yellow-soft)}
+.avatar svg{width:100%;height:100%}
+.who small{display:block;color:var(--text-3);font-size:11.5px}
+.who b{font-size:13.5px;font-family:"Sora";font-weight:600}
+.who .txt{line-height:1.25}
+
+/* ---------- page head ---------- */
+.head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:4px 4px 0}
+.head h1{font-size:32px;font-weight:600}
+.head p{color:var(--text-2);font-size:13.5px;margin-top:3px}
+.head .acts{margin-left:auto;display:flex;gap:9px}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;padding:11px 19px;border-radius:var(--pill);
+  font-weight:600;font-size:13.5px;transition:transform .25s cubic-bezier(.3,1.3,.5,1),box-shadow .25s ease,background .25s ease;
+}
+.btn.solid{background:var(--yellow);color:#0E0E0E;box-shadow:0 8px 20px rgba(245,197,24,.28)}
+.btn.solid:hover{transform:translateY(-3px);box-shadow:0 14px 28px rgba(245,197,24,.42)}
+.btn.ghost{border:1px solid var(--line);background:var(--panel);color:var(--text)}
+.btn.ghost:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+
+/* ============================================================
+   GRID + CARDS
+   ============================================================ */
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--gap)}
+.card{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;
+  box-shadow:var(--shadow);position:relative;overflow:hidden;
+  transition:transform .4s cubic-bezier(.2,.9,.3,1),box-shadow .4s ease,background .5s ease,border-color .5s ease;
+}
+.card:hover{transform:translateY(-5px);box-shadow:var(--shadow-lift)}
+.card h3{font-size:15.5px;font-weight:600}
+.card-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.card-head .right{margin-left:auto;display:flex;align-items:center;gap:7px}
+
+.pill-btn{font-size:12px;font-weight:600;color:var(--text-2);background:var(--chip);border-radius:20px;padding:6px 12px;display:inline-flex;align-items:center;gap:5px;transition:background .22s,color .22s}
+.pill-btn:hover{background:var(--yellow);color:#0E0E0E}
+
+/* ---------- stat cards ---------- */
+.stat .top{display:flex;align-items:flex-start;gap:10px;margin-bottom:14px}
+.stat .top span{font-size:13.5px;font-weight:600;color:var(--text-2)}
+.stat .go{
+  margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);
+  display:grid;place-items:center;color:var(--text-2);flex:0 0 30px;
+  transition:transform .35s cubic-bezier(.3,1.4,.5,1),background .3s,color .3s,border-color .3s;
+}
+.card:hover .go{transform:rotate(45deg);background:var(--ink);color:#fff;border-color:var(--ink)}
+.stat .num{font-size:42px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.trend{display:inline-flex;align-items:center;gap:6px;margin-top:14px;font-size:11.5px;font-weight:500;color:var(--text-2)}
+.trend i{
+  width:19px;height:19px;border-radius:50%;background:var(--chip);display:grid;place-items:center;
+  font-style:normal;color:var(--text)
+}
+.stat.hero{background:var(--yellow);border-color:var(--yellow)}
+.stat.hero .top span,.stat.hero .num,.stat.hero .trend{color:#0E0E0E}
+.stat.hero .go{border-color:rgba(14,14,14,.28);color:#0E0E0E}
+.stat.hero:hover .go{background:#0E0E0E;color:var(--yellow);border-color:#0E0E0E}
+.stat.hero .trend i{background:rgba(14,14,14,.14);color:#0E0E0E}
+.spark{position:absolute;right:0;bottom:0;width:150px;height:64px;opacity:.5;pointer-events:none}
+.spark path{stroke:#0E0E0E;stroke-width:2.5;fill:none;stroke-linecap:round;
+  stroke-dasharray:var(--len,400);stroke-dashoffset:var(--len,400)}
+body.ready .spark path{animation:draw 1.5s cubic-bezier(.4,0,.2,1) .55s forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+
+/* ---------- chart ---------- */
+.span2{grid-column:span 2}
+.span3{grid-column:span 3}
+
+.chart{display:flex;align-items:stretch;gap:12px;height:206px;padding-top:8px}
+.col{flex:1;display:flex;flex-direction:column;gap:10px;min-width:0}
+.track{flex:1;position:relative;min-height:0}
+.bar{
+  position:absolute;bottom:0;left:0;right:0;margin:0 auto;
+  width:100%;max-width:52px;border-radius:26px;
+  height:0;
+  background:repeating-linear-gradient(115deg,var(--chip) 0 6px,transparent 6px 12px);
+  border:1px solid var(--line);
+  transition:height .95s cubic-bezier(.2,.9,.25,1) var(--d,0s),filter .3s ease;
+}
+.bar.fill{background:var(--yellow);border-color:var(--yellow)}
+.bar.fill.deep{background:var(--ink);border-color:var(--ink)}
+html[data-theme="dark"] .bar.fill.deep{background:#3A3A31;border-color:#3A3A31}
+.bar.fill.blue{background:var(--blue);border-color:var(--blue)}
+.col:hover .bar{filter:brightness(.94)}
+.col > span{font-size:12px;color:var(--text-3);font-weight:500;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tip{
+  position:absolute;top:-14px;left:50%;transform:translate(-50%,6px) scale(.86);opacity:0;
+  background:var(--ink);color:#fff;font-family:"Sora";font-size:11px;font-weight:600;
+  padding:5px 10px;border-radius:var(--pill);white-space:nowrap;pointer-events:none;
+}
+.chart.play .tip.auto{animation:pop .5s cubic-bezier(.3,1.5,.5,1) var(--td,1.4s) forwards}
+@keyframes pop{to{opacity:1;transform:translate(-50%,0) scale(1)}}
+.col:hover .tip{opacity:1;transform:translate(-50%,0) scale(1)}
+.sub{font-size:12.5px;color:var(--text-2);margin-top:3px}
+.sub b{color:var(--text);font-weight:600}
+
+.seg{display:inline-flex;gap:2px;background:var(--chip);border-radius:var(--pill);padding:3px}
+.seg button{
+  font-size:12px;font-weight:600;color:var(--text-2);padding:6px 14px;border-radius:var(--pill);
+  transition:background .25s ease,color .25s ease;
+}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:var(--panel);color:var(--text);box-shadow:0 2px 6px rgba(14,14,14,.08)}
+html[data-theme="dark"] .seg button.on{background:var(--yellow);color:#0E0E0E}
+
+.chart.dense{gap:6px}
+.chart.dense .bar{max-width:24px}
+.chart.dense .col span{font-size:10px}
+
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.legend i{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:7px}
+.legend span{font-size:12px;color:var(--text-2);display:inline-flex;align-items:center}
+
+/* ---------- reminder ---------- */
+.reminder h4{font-size:17px;font-weight:600;line-height:1.3;margin-bottom:6px}
+.reminder .when{font-size:12.5px;color:var(--text-2);margin-bottom:16px}
+.reminder .when b{color:var(--text);font-weight:600}
+.start{
+  width:100%;background:var(--ink);color:#fff;border-radius:var(--pill);padding:12px;font-weight:600;font-size:13.5px;
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  transition:transform .25s ease,box-shadow .25s ease,background .3s;
+}
+html[data-theme="dark"] .start{background:var(--yellow);color:#0E0E0E}
+.start:hover{transform:translateY(-3px);box-shadow:0 14px 26px rgba(14,14,14,.22)}
+
+/* ---------- list ---------- */
+.list{display:flex;flex-direction:column;gap:3px}
+.row{display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:var(--pill);transition:background .22s ease,transform .22s ease}
+.row:hover{background:var(--panel-2);transform:translateX(3px)}
+.ic{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;flex:0 0 34px}
+.ic.y{background:var(--yellow-soft);color:#8A6D00}
+.ic.b{background:var(--blue-soft);color:var(--blue)}
+.ic.k{background:var(--chip);color:var(--text)}
+html[data-theme="dark"] .ic.y{color:var(--yellow)}
+.row .txt{min-width:0;flex:1}
+.row b{display:block;font-size:13.5px;font-weight:600;font-family:"Sora";white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row small{color:var(--text-3);font-size:11.5px}
+.status{font-size:11px;font-weight:700;padding:5px 10px;border-radius:20px;white-space:nowrap}
+.s-done{background:var(--blue-soft);color:var(--blue)}
+.s-wait{background:var(--yellow-soft);color:#8A6D00}
+.s-live{background:var(--chip);color:var(--text-2)}
+html[data-theme="dark"] .s-wait{color:var(--yellow)}
+.face{width:34px;height:34px;border-radius:50%;flex:0 0 34px;overflow:hidden}
+
+/* ---------- gauge ---------- */
+.gauge-wrap{display:flex;flex-direction:column;align-items:center}
+.gauge{width:100%;max-width:250px}
+.gauge .track{fill:none;stroke:var(--chip);stroke-width:26;stroke-linecap:round}
+.gauge .fillArc{fill:none;stroke:var(--yellow);stroke-width:26;stroke-linecap:round}
+.gauge .fillArc2{fill:none;stroke:var(--blue);stroke-width:26;stroke-linecap:round;opacity:.9}
+.gauge-val{text-align:center;margin-top:-58px;position:relative;z-index:2;pointer-events:none}
+.gauge-val b{font-family:"Sora";font-size:36px;font-weight:600;font-variant-numeric:tabular-nums}
+.gauge-val small{display:block;color:var(--text-3);font-size:11.5px;margin-top:2px}
+
+/* ---------- timer ---------- */
+.timer{background:var(--ink);border-color:var(--ink);color:#fff;overflow:hidden}
+.timer::after{
+  content:"";position:absolute;inset:auto -30% -60% -30%;height:180px;
+  background:radial-gradient(ellipse at 50% 100%,rgba(245,197,24,.28),transparent 65%);
+  animation:breathe 6s ease-in-out infinite;
+}
+@keyframes breathe{50%{transform:translateY(-14px) scale(1.08)}}
+.timer h3{color:#fff}
+.clock{font-family:"Sora";font-size:38px;font-weight:600;font-variant-numeric:tabular-nums;position:relative;z-index:1;letter-spacing:-.03em}
+.timer small{color:#9C9C95;font-size:11.5px;position:relative;z-index:1}
+.ctrl{display:flex;gap:10px;margin-top:18px;position:relative;z-index:1}
+.ctrl button{
+  width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);color:#fff;
+  transition:transform .25s cubic-bezier(.3,1.4,.5,1),background .25s;
+}
+.ctrl button:hover{transform:scale(1.1);background:rgba(255,255,255,.2)}
+.ctrl button.stop{background:var(--yellow);color:#0E0E0E}
+.ctrl button.stop:hover{background:#ffd83d}
+
+/* ---------- meter rows ---------- */
+.meter{height:8px;border-radius:20px;background:var(--chip);overflow:hidden;margin-top:8px}
+.meter i{display:block;height:100%;border-radius:20px;width:0;background:var(--yellow);
+  transition:width 1.4s cubic-bezier(.2,.9,.25,1)}
+.meter i.blue{background:var(--blue)}
+.meter i.ink{background:var(--ink)}
+html[data-theme="dark"] .meter i.ink{background:#4A4A40}
+
+/* ---------- footer note ---------- */
+.foot{text-align:center;color:var(--text-3);font-size:11.5px;padding:6px 0 10px}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width:1180px){
+  .grid{grid-template-columns:repeat(2,1fr)}
+  .span2,.span3{grid-column:span 2}
+}
+@media (max-width:900px){
+  .shell{padding:12px;gap:12px}
+  .head h1{font-size:26px}
+  .who .txt{display:none}
+  /* expanded on a small screen floats over the page, still on the left */
+  body:not(.rail) .side{
+    position:fixed;left:12px;top:12px;bottom:12px;height:auto;z-index:60;
+    box-shadow:0 30px 70px rgba(14,14,14,.3);
+  }
+  body:not(.rail) .backdrop{opacity:1;pointer-events:auto}
+}
+@media (max-width:640px){
+  body{--rail:72px}
+  .grid{grid-template-columns:1fr}
+  .span2,.span3{grid-column:span 1}
+  .head .acts{width:100%}
+  .btn{flex:1;justify-content:center}
+  .chart{height:170px;gap:7px}
+  .shell{padding:12px}
+
+  /* one row: menu, search, alerts, profile */
+  .topbar{flex-wrap:wrap;gap:8px;padding:10px 12px}
+  .icon-btn.topmenu,.icon-btn.searchbtn{display:grid}
+  .icon-btn.bell{display:none}
+  .search{display:none;order:9;flex:1 0 100%;max-width:none;margin-top:2px}
+  body.searching .search{display:flex}
+  body.searching .searchbtn{background:var(--yellow);color:#0E0E0E}
+  .kbd{display:none}
+
+  /* the sidebar is out of the flow entirely until it is called */
+  body.ready .side.slide-l{animation:none}
+  .side{
+    position:fixed;left:12px;top:12px;bottom:auto;
+    width:48px;height:48px;flex:none;padding:0;gap:0;
+    border-radius:50%;overflow:hidden;z-index:120;
+    opacity:0;transform:scale(.55);transform-origin:top left;pointer-events:none;
+    box-shadow:0 26px 60px rgba(14,14,14,.34);
+    transition:width .48s var(--ease),height .48s var(--ease),border-radius .48s var(--ease),
+               padding .48s var(--ease),gap .48s var(--ease),opacity .3s ease,
+               transform .48s var(--ease),background .5s ease,border-color .5s ease;
+  }
+  .side-top{width:auto;height:46px;flex:none;justify-content:flex-start;gap:9px;padding:0 2px}
+  .side .nav-label,.side .nav{opacity:0;transition:opacity .18s ease}
+  .side .promo,.side .promo-mini{display:none}
+  body.rail .hamb svg{transform:none}
+
+  /* tapping the menu grows the panel out of that corner */
+  body:not(.rail) .side{
+    width:calc(100vw - 24px);max-width:270px;height:auto;
+    padding:8px 12px 14px;gap:12px;border-radius:30px;
+    opacity:1;transform:scale(1);pointer-events:auto;
+  }
+  body:not(.rail) .side-name{display:inline-block}
+  body:not(.rail) .side .nav-label,
+  body:not(.rail) .side .nav{opacity:1;transition:opacity .3s ease .16s}
+  body:not(.rail) .nav a{animation:navIn .42s var(--ease) backwards}
+  body:not(.rail) .nav a:nth-child(1){animation-delay:.14s}
+  body:not(.rail) .nav a:nth-child(2){animation-delay:.19s}
+  body:not(.rail) .nav a:nth-child(3){animation-delay:.24s}
+  body:not(.rail) .nav a:nth-child(4){animation-delay:.29s}
+  body:not(.rail) .nav a:nth-child(5){animation-delay:.34s}
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .reveal,.slide-l,.fade{opacity:1!important;transform:none!important}
+  .bar{transition:none!important}
+  .tip{opacity:1!important;transform:translate(-50%,0)!important}
+  .spark path{stroke-dashoffset:0!important}
+}
+:focus-visible{outline:3px solid var(--blue);outline-offset:3px;border-radius:8px}
+</style>
+</head>
+<body>
+
+<div class="splash" id="splash">
+  <div class="mark">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
+  </div>
+  <b>No Name</b>
+  <div class="splash-bar"><i id="splashbar"></i></div>
+  <small id="splashtext">Connecting</small>
+</div>
+
+<div class="backdrop" id="backdrop" aria-hidden="true"></div>
+
+<div class="shell">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="side slide-l" style="--d:.05s">
+    <div class="side-top">
+      <button class="icon-btn hamb" id="menu" aria-label="Collapse menu" aria-expanded="true" title="Collapse menu">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+      </button>
+      <b class="side-name">No Name</b>
+    </div>
+
+    <div>
+      <p class="nav-label">Menu</p>
+      <nav class="nav">
+        <a href="#" class="on" data-tip="Dashboard"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg><span class="lbl">Dashboard</span></a>
+        <a href="#" data-tip="Tasks"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg><span class="lbl">Tasks</span><span class="tag">6</span></a>
+        <a href="#" data-tip="Calendar"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg><span class="lbl">Calendar</span></a>
+        <a href="#" data-tip="Analytics"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg><span class="lbl">Analytics</span></a>
+        <a href="#" data-tip="Team"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="lbl">Team</span></a>
+      </nav>
+    </div>
+
+    <div>
+      <p class="nav-label">General</p>
+      <nav class="nav">
+        <a href="#" data-tip="Settings"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span class="lbl">Settings</span></a>
+        <a href="#" data-tip="Help"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg><span class="lbl">Help</span></a>
+        <a href="#" data-tip="Sign out"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span class="lbl">Sign out</span></a>
+      </nav>
+    </div>
+
+    <div class="promo">
+      <b>Get the mobile app</b>
+      <p>Track sales and approve orders from anywhere.</p>
+      <button type="button">Download</button>
+    </div>
+
+    <button class="promo-mini" type="button" data-tip="Get the mobile app" aria-label="Get the mobile app">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+    </button>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+
+    <!-- topbar -->
+    <header class="topbar fade" style="--d:.18s">
+      <button class="icon-btn topmenu" id="topmenu" aria-label="Open menu" title="Open menu">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+      </button>
+      <button class="icon-btn searchbtn" id="searchbtn" aria-label="Search" title="Search">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      </button>
+      <label class="search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="q" type="text" placeholder="Search anything" aria-label="Search">
+        <span class="kbd">⌘K</span>
+      </label>
+
+      <div class="tools">
+        <button class="icon-btn" id="theme" aria-label="Toggle dark mode" title="Toggle dark mode">
+          <svg id="ico-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+          <svg id="ico-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:none"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+        </button>
+        <button class="icon-btn bell" aria-label="Notifications"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><span class="dot warn"></span></button>
+
+        <div class="who">
+          <div class="avatar">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" fill="#F5C518"/><circle cx="24" cy="19" r="8" fill="#0E0E0E"/><path d="M8 46c2-9 8-13 16-13s14 4 16 13z" fill="#0E0E0E"/></svg>
+          </div>
+          <div class="txt">
+            <b>Totok Michael</b>
+            <small>hey@nonameapp.com</small>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- page head -->
+    <div class="head reveal" style="--d:.28s">
+      <div>
+        <h1>Dashboard</h1>
+        <p>Plan, prioritise and finish the work that moves the number.</p>
+      </div>
+      <div class="acts">
+        <button class="btn solid"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add project</button>
+        <button class="btn ghost"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>Import data</button>
+      </div>
+    </div>
+
+    <!-- KPI row -->
+    <section class="grid">
+      <article class="card stat hero reveal" style="--d:.36s">
+        <div class="top"><span>Total projects</span>
+          <div class="go"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg></div>
+        </div>
+        <p class="num" data-count="24">0</p>
+        <span class="trend"><i><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></i>Increased from last month</span>
+        <svg class="spark" viewBox="0 0 150 64" preserveAspectRatio="none"><path d="M2 52C18 52 22 34 38 34s20 14 34 8 22-26 38-26 24 16 38 16"/></svg>
+      </article>
+
+      <article class="card stat reveal" style="--d:.44s">
+        <div class="top"><span>Ended projects</span>
+          <div class="go"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg></div>
+        </div>
+        <p class="num" data-count="10">0</p>
+        <span class="trend"><i><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></i>Increased from last month</span>
+      </article>
+
+      <article class="card stat reveal" style="--d:.52s">
+        <div class="top"><span>Running projects</span>
+          <div class="go"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg></div>
+        </div>
+        <p class="num" data-count="12">0</p>
+        <span class="trend"><i><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></i>Increased from last month</span>
+      </article>
+
+      <article class="card stat reveal" style="--d:.6s">
+        <div class="top"><span>Pending projects</span>
+          <div class="go"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg></div>
+        </div>
+        <p class="num" data-count="2">0</p>
+        <span class="trend"><i><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></i>On discussion</span>
+      </article>
+    </section>
+
+    <!-- analytics + reminder + project list -->
+    <section class="grid">
+      <article class="card span2 reveal" style="--d:.68s">
+        <div class="card-head">
+          <div>
+            <h3>Project analytics</h3>
+            <p class="sub" id="chartSub">Loading</p>
+          </div>
+          <div class="right">
+            <div class="seg" id="seg">
+              <button class="on" data-range="week" type="button">Week</button>
+              <button data-range="month" type="button">Month</button>
+              <button data-range="year" type="button">Year</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart" id="chart"></div>
+
+        <div class="legend">
+          <span><i style="background:var(--ink)"></i>Delivered</span>
+          <span><i style="background:var(--yellow)"></i>In progress</span>
+          <span><i style="background:var(--blue)"></i>Newly opened</span>
+          <span><i style="background:var(--chip)"></i>No activity</span>
+        </div>
+      </article>
+
+      <article class="card reminder reveal" style="--d:.76s">
+        <div class="card-head"><h3>Reminders</h3></div>
+        <h4>Meeting with Arc Company</h4>
+        <p class="when">Today, <b>02:00 pm</b> to 04:00 pm</p>
+        <button class="start">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+          Start meeting
+        </button>
+        <div class="legend" style="margin-top:18px">
+          <span><i style="background:var(--yellow)"></i>3 more reminders today</span>
+        </div>
+      </article>
+
+      <article class="card reveal" style="--d:.84s">
+        <div class="card-head">
+          <h3>Projects</h3>
+          <div class="right"><button class="pill-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>New</button></div>
+        </div>
+        <div class="list">
+          <div class="row"><div class="ic b"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg></div>
+            <div class="txt"><b>Develop API endpoints</b><small>Due 26 July</small></div></div>
+          <div class="row"><div class="ic y"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg></div>
+            <div class="txt"><b>Onboarding flow</b><small>Due 28 July</small></div></div>
+          <div class="row"><div class="ic k"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></div>
+            <div class="txt"><b>Build dashboard</b><small>Due 30 July</small></div></div>
+          <div class="row"><div class="ic y"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+            <div class="txt"><b>Optimise page load</b><small>Due 2 August</small></div></div>
+          <div class="row"><div class="ic b"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></div>
+            <div class="txt"><b>Cross browser testing</b><small>Due 5 August</small></div></div>
+        </div>
+      </article>
+    </section>
+
+    <!-- team + progress + timer -->
+    <section class="grid">
+      <article class="card span2 reveal" style="--d:.92s">
+        <div class="card-head">
+          <h3>Team collaboration</h3>
+          <div class="right"><button class="pill-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add member</button></div>
+        </div>
+        <div class="list">
+          <div class="row">
+            <div class="face"><svg viewBox="0 0 48 48"><rect width="48" height="48" fill="#F5C518"/><circle cx="24" cy="19" r="8" fill="#0E0E0E"/><path d="M8 46c2-9 8-13 16-13s14 4 16 13z" fill="#0E0E0E"/></svg></div>
+            <div class="txt"><b>Alexandra Deff</b><small>Working on Github project repository</small></div>
+            <span class="status s-done">Completed</span>
+          </div>
+          <div class="row">
+            <div class="face"><svg viewBox="0 0 48 48"><rect width="48" height="48" fill="#1A6BFF"/><circle cx="24" cy="19" r="8" fill="#FFFFFF"/><path d="M8 46c2-9 8-13 16-13s14 4 16 13z" fill="#FFFFFF"/></svg></div>
+            <div class="txt"><b>Edwin Adenike</b><small>Working on integrating user authentication</small></div>
+            <span class="status s-live">In progress</span>
+          </div>
+          <div class="row">
+            <div class="face"><svg viewBox="0 0 48 48"><rect width="48" height="48" fill="#0E0E0E"/><circle cx="24" cy="19" r="8" fill="#F5C518"/><path d="M8 46c2-9 8-13 16-13s14 4 16 13z" fill="#F5C518"/></svg></div>
+            <div class="txt"><b>Isaac Oluwatemilorun</b><small>Working on search and filter functionality</small></div>
+            <span class="status s-wait">Pending</span>
+          </div>
+          <div class="row">
+            <div class="face"><svg viewBox="0 0 48 48"><rect width="48" height="48" fill="#FDF3CE"/><circle cx="24" cy="19" r="8" fill="#0E0E0E"/><path d="M8 46c2-9 8-13 16-13s14 4 16 13z" fill="#0E0E0E"/></svg></div>
+            <div class="txt"><b>David Oshodi</b><small>Working on responsive layout for homepage</small></div>
+            <span class="status s-live">In progress</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="card reveal" style="--d:1s">
+        <div class="card-head"><h3>Project progress</h3></div>
+        <div class="gauge-wrap">
+          <svg class="gauge" viewBox="0 0 240 200" role="img" aria-label="Project progress 41 percent">
+            <path class="track" d="M56.4 183.6A90 90 0 1 1 183.6 183.6"/>
+            <path class="fillArc2" id="arc2" d="M56.4 183.6A90 90 0 1 1 183.6 183.6"/>
+            <path class="fillArc" id="arc1" d="M56.4 183.6A90 90 0 1 1 183.6 183.6"/>
+          </svg>
+          <div class="gauge-val">
+            <b><span id="pct">0</span>%</b>
+            <small>Project ended</small>
+          </div>
+        </div>
+        <div class="legend" style="justify-content:center;gap:14px">
+          <span><i style="background:var(--yellow)"></i>Completed</span>
+          <span><i style="background:var(--blue)"></i>In progress</span>
+          <span><i style="background:var(--chip)"></i>Pending</span>
+        </div>
+      </article>
+
+      <article class="card timer reveal" style="--d:1.08s">
+        <div class="card-head"><h3>Time tracker</h3></div>
+        <p class="clock" id="clock">00:00:00</p>
+        <small>Cross browser testing session</small>
+        <div class="ctrl">
+          <button id="pause" aria-label="Pause timer">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></svg>
+          </button>
+          <button class="stop" id="stop" aria-label="Stop timer">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect width="14" height="14" x="5" y="5" rx="2"/></svg>
+          </button>
+        </div>
+      </article>
+    </section>
+
+    <!-- workload meters -->
+    <section class="grid">
+      <article class="card span2 reveal" style="--d:1.16s">
+        <div class="card-head"><h3>Workload by team</h3><div class="right"><button class="pill-btn">Weekly</button></div></div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px"><b style="font-weight:600">Design</b><span style="color:var(--text-2)">82%</span></div>
+            <div class="meter"><i data-w="82"></i></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px"><b style="font-weight:600">Engineering</b><span style="color:var(--text-2)">64%</span></div>
+            <div class="meter"><i class="blue" data-w="64"></i></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px"><b style="font-weight:600">Quality assurance</b><span style="color:var(--text-2)">38%</span></div>
+            <div class="meter"><i class="ink" data-w="38"></i></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card span2 reveal" style="--d:1.24s">
+        <div class="card-head"><h3>Latest activity</h3><div class="right"><button class="pill-btn">View all</button></div></div>
+        <div class="list">
+          <div class="row"><div class="ic y"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+            <div class="txt"><b>Repository merged</b><small>Alexandra Deff, 12 minutes ago</small></div></div>
+          <div class="row"><div class="ic b"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg></div>
+            <div class="txt"><b>New member added</b><small>David Oshodi, 1 hour ago</small></div></div>
+          <div class="row"><div class="ic k"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <div class="txt"><b>Deadline moved to Friday</b><small>Edwin Adenike, 3 hours ago</small></div></div>
+        </div>
+      </article>
+    </section>
+
+    <p class="foot fade" style="--d:1.4s">Template build. Replace the sample data with live records.</p>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- splash ---------- */
+  /* Steps stand in for the real work: session, records, then render.
+     Swap the timings for actual fetch callbacks when this is wired up. */
+  var splash = document.getElementById("splash");
+  var splashBar = document.getElementById("splashbar");
+  var splashText = document.getElementById("splashtext");
+  var steps = [
+    { at: 0,   pct: 12, label: "Connecting" },
+    { at: 280, pct: 46, label: "Loading records" },
+    { at: 620, pct: 78, label: "Building dashboard" },
+    { at: 900, pct: 100, label: "Ready" }
+  ];
+
+  function runSplash(done){
+    if(reduce){ splash.classList.add("done"); done(); return; }
+    steps.forEach(function(s){
+      setTimeout(function(){
+        splashBar.style.width = s.pct + "%";
+        splashText.textContent = s.label;
+      }, s.at);
+    });
+    setTimeout(function(){
+      splash.classList.add("done");
+      setTimeout(done, 120);
+    }, 1180);
+  }
+
+  /* ---------- sparkline length ---------- */
+  document.querySelectorAll(".spark path").forEach(function(p){
+    var len = p.getTotalLength();
+    p.style.setProperty("--len", len);
+  });
+
+  /* ---------- counters ---------- */
+  function ease(t){ return 1 - Math.pow(1 - t, 3); }
+  function countUp(el, target, dur, delay){
+    if(reduce){ el.textContent = target.toLocaleString(); return; }
+    var start = null;
+    function step(ts){
+      if(start === null) start = ts;
+      var p = Math.min((ts - start) / dur, 1);
+      el.textContent = Math.round(ease(p) * target).toLocaleString();
+      if(p < 1) requestAnimationFrame(step);
+    }
+    setTimeout(function(){ requestAnimationFrame(step); }, delay);
+  }
+  /* ---------- gauge ---------- */
+  var arc1 = document.getElementById("arc1");
+  var arc2 = document.getElementById("arc2");
+  var pctEl = document.getElementById("pct");
+  var LEN = arc1.getTotalLength();
+  var completed = 41, inProgress = 27;
+
+  [arc1, arc2].forEach(function(a){
+    a.style.strokeDasharray = LEN;
+    a.style.strokeDashoffset = LEN;
+  });
+
+  function drawArc(el, value, dur, delay){
+    var goal = LEN - (LEN * value / 100);
+    if(reduce){ el.style.strokeDashoffset = goal; return; }
+    el.style.transition = "stroke-dashoffset " + dur + "ms cubic-bezier(.2,.9,.25,1) " + delay + "ms";
+    requestAnimationFrame(function(){ el.style.strokeDashoffset = goal; });
+  }
+
+  /* ---------- project analytics ---------- */
+  /* Sample data only. Each column is a label, a value and a state.
+     States: done, active, new, idle. Swap this object for a query result. */
+  var CHART = {
+    week: {
+      note: "<b>165 tasks</b> tracked this week. Wednesday was the busiest at 38.",
+      cols: [
+        { l:"S", v:12, s:"idle"   }, { l:"M", v:26, s:"done"   },
+        { l:"T", v:20, s:"active" }, { l:"W", v:38, s:"done"   },
+        { l:"T", v:24, s:"idle"   }, { l:"F", v:15, s:"idle"   },
+        { l:"S", v:30, s:"new"    }
+      ]
+    },
+    month: {
+      note: "<b>396 tasks</b> closed in July. Week 4 carried the load.",
+      cols: [
+        { l:"Week 1", v:88,  s:"done"   }, { l:"Week 2", v:104, s:"active" },
+        { l:"Week 3", v:72,  s:"idle"   }, { l:"Week 4", v:132, s:"new"    }
+      ]
+    },
+    year: {
+      note: "<b>1,195 tasks</b> this year. November set the record at 145.",
+      cols: [
+        { l:"Jan", v:62,  s:"idle"   }, { l:"Feb", v:74,  s:"idle"   },
+        { l:"Mar", v:58,  s:"idle"   }, { l:"Apr", v:91,  s:"done"   },
+        { l:"May", v:105, s:"active" }, { l:"Jun", v:83,  s:"idle"   },
+        { l:"Jul", v:118, s:"done"   }, { l:"Aug", v:96,  s:"idle"   },
+        { l:"Sep", v:130, s:"new"    }, { l:"Oct", v:112, s:"idle"   },
+        { l:"Nov", v:145, s:"active" }, { l:"Dec", v:121, s:"done"   }
+      ]
+    }
+  };
+  var STATE = { done:"fill deep", active:"fill", new:"fill blue", idle:"" };
+
+  var chartEl = document.getElementById("chart");
+  var chartSub = document.getElementById("chartSub");
+  var seg = document.getElementById("seg");
+  var range = "week";
+
+  function renderChart(key){
+    var set = CHART[key];
+    var max = 0, peak = 0, i;
+    for(i = 0; i < set.cols.length; i++){
+      if(set.cols[i].v > max){ max = set.cols[i].v; peak = i; }
+    }
+
+    var last = (set.cols.length * 0.07 + 1).toFixed(2);
+    var html = "";
+    for(i = 0; i < set.cols.length; i++){
+      var c = set.cols[i];
+      var d = (i * 0.07).toFixed(2);
+      html += '<div class="col">'
+            +   '<div class="track">'
+            +     '<div class="bar ' + STATE[c.s] + '" data-h="'
+            +        Math.max(Math.round(c.v / max * 100), 9) + '" style="--d:' + d + 's">'
+            +       '<span class="tip' + (i === peak ? " auto" : "") + '" style="--td:' + last + 's">'
+            +         c.v + '</span>'
+            +     '</div>'
+            +   '</div>'
+            +   '<span>' + c.l + '</span>'
+            + '</div>';
+    }
+
+    chartSub.innerHTML = set.note;
+    chartEl.classList.remove("play");
+    chartEl.classList.toggle("dense", set.cols.length > 8);
+    chartEl.innerHTML = html;
+
+    var bars = chartEl.querySelectorAll(".bar");
+    if(reduce){
+      bars.forEach(function(b){ b.style.height = b.getAttribute("data-h") + "%"; });
+      chartEl.classList.add("play");
+      return;
+    }
+    /* paint once at zero, then let each bar transition up on its own delay */
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        bars.forEach(function(b){ b.style.height = b.getAttribute("data-h") + "%"; });
+        chartEl.classList.add("play");
+      });
+    });
+  }
+
+  seg.addEventListener("click", function(e){
+    var btn = e.target.closest("button");
+    if(!btn) return;
+    seg.querySelectorAll("button").forEach(function(b){ b.classList.remove("on"); });
+    btn.classList.add("on");
+    range = btn.getAttribute("data-range");
+    renderChart(range);                     /* clicking again replays the rise */
+  });
+
+  /* ---------- everything starts once the splash clears ---------- */
+  function boot(){
+    document.body.classList.add("ready");
+
+    setTimeout(function(){ renderChart(range); }, reduce ? 0 : 550);
+
+    document.querySelectorAll("[data-count]").forEach(function(el, i){
+      countUp(el, parseFloat(el.getAttribute("data-count")), 1500, 400 + i * 110);
+    });
+
+    drawArc(arc2, completed + inProgress, 1700, 800);
+    drawArc(arc1, completed, 1700, 900);
+    countUp(pctEl, completed, 1700, 900);
+
+    setTimeout(function(){
+      document.querySelectorAll(".meter i").forEach(function(bar, i){
+        setTimeout(function(){ bar.style.width = bar.getAttribute("data-w") + "%"; }, i * 140);
+      });
+    }, reduce ? 0 : 1100);
+  }
+
+  /* ---------- time tracker ---------- */
+  var seconds = 5048, running = true;
+  var clock = document.getElementById("clock");
+  function pad(n){ return n < 10 ? "0" + n : "" + n; }
+  function paint(){
+    clock.textContent = pad(Math.floor(seconds/3600)) + ":" + pad(Math.floor(seconds%3600/60)) + ":" + pad(seconds%60);
+  }
+  paint();
+  setInterval(function(){ if(running){ seconds++; paint(); } }, 1000);
+
+  document.getElementById("pause").addEventListener("click", function(){
+    running = !running;
+    this.style.background = running ? "rgba(255,255,255,.1)" : "rgba(245,197,24,.28)";
+  });
+  document.getElementById("stop").addEventListener("click", function(){
+    running = false; seconds = 0; paint();
+  });
+
+  /* ---------- sidebar collapse ---------- */
+  var menuBtn = document.getElementById("menu");
+  var backdrop = document.getElementById("backdrop");
+  var userSet = false;
+
+  function setRail(on){
+    document.body.classList.toggle("rail", on);
+    menuBtn.setAttribute("aria-expanded", on ? "false" : "true");
+    menuBtn.setAttribute("title", on ? "Expand menu" : "Collapse menu");
+    menuBtn.setAttribute("aria-label", on ? "Expand menu" : "Collapse menu");
+  }
+
+  menuBtn.addEventListener("click", function(){
+    userSet = true;
+    setRail(!document.body.classList.contains("rail"));
+  });
+
+  document.getElementById("topmenu").addEventListener("click", function(){
+    userSet = true;
+    setRail(!document.body.classList.contains("rail"));
+  });
+
+  /* on a phone the search field only appears when it is asked for */
+  var searchBtn = document.getElementById("searchbtn");
+  searchBtn.addEventListener("click", function(){
+    var open = document.body.classList.toggle("searching");
+    if(open) setTimeout(function(){ document.getElementById("q").focus(); }, 60);
+  });
+
+  backdrop.addEventListener("click", function(){ setRail(true); });
+
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape"){
+      document.body.classList.remove("searching");
+      if(window.innerWidth <= 900) setRail(true);
+    }
+  });
+
+  /* collapse by default on narrow screens, until the person decides otherwise */
+  function autoRail(){
+    if(!userSet) setRail(window.innerWidth <= 1100);
+  }
+  autoRail();
+  window.addEventListener("resize", autoRail);
+
+  /* ---------- theme ---------- */
+  var root = document.documentElement;
+  var sun = document.getElementById("ico-sun");
+  var moon = document.getElementById("ico-moon");
+  function setTheme(mode){
+    root.setAttribute("data-theme", mode);
+    sun.style.display = mode === "dark" ? "none" : "block";
+    moon.style.display = mode === "dark" ? "block" : "none";
+  }
+  if(window.matchMedia("(prefers-color-scheme: dark)").matches) setTheme("dark");
+  document.getElementById("theme").addEventListener("click", function(){
+    setTheme(root.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  });
+
+  /* ---------- search shortcut ---------- */
+  document.addEventListener("keydown", function(e){
+    if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"){
+      e.preventDefault();
+      document.getElementById("q").focus();
+    }
+  });
+
+  /* ---------- sidebar active state ---------- */
+  document.querySelectorAll(".nav a").forEach(function(a){
+    a.addEventListener("click", function(e){
+      e.preventDefault();
+      document.querySelectorAll(".nav a").forEach(function(x){ x.classList.remove("on"); });
+      a.classList.add("on");
+      /* on a phone the panel closes back into the bubble after the choice */
+      if(window.innerWidth <= 900) setRail(true);
+    });
+  });
+
+  /* ---------- go ---------- */
+  runSplash(boot);
+})();
+</script>
+</body>
+</html>
