@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maru Quick Operations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   TOKENS
+   ============================================================ */
+:root{
+  --white:#FFFFFF;
+  --ink:#0E0E0E;
+  --yellow:#F5C518;
+  --yellow-soft:#FDF3CE;
+  --blue:#1A6BFF;
+  --blue-soft:#E7EFFF;
+
+  --bg:#F4F4F1;
+  --panel:#FFFFFF;
+  --panel-2:#FAFAF8;
+  --line:#E9E9E4;
+  --text:#0E0E0E;
+  --text-2:#6E6E68;
+  --text-3:#9C9C95;
+  --chip:#F2F2EE;
+  --shadow:0 1px 2px rgba(14,14,14,.04), 0 14px 34px rgba(14,14,14,.06);
+  --shadow-lift:0 2px 6px rgba(14,14,14,.06), 0 22px 46px rgba(14,14,14,.12);
+
+  --r-lg:28px;
+  --r-md:20px;
+  --r-sm:12px;
+  --gap:18px;
+  --sidebar:228px;
+  --rail:72px;
+  --pill:999px;
+  --ease:cubic-bezier(.66,0,.24,1);
+}
+body.rail{--sidebar:var(--rail)}
+html[data-theme="dark"]{
+  --bg:#0B0B0A;
+  --panel:#151513;
+  --panel-2:#1B1B18;
+  --line:#28281F;
+  --text:#F5F5F0;
+  --text-2:#9E9E95;
+  --text-3:#71716A;
+  --chip:#201F1C;
+  --white:#151513;
+  --yellow-soft:#2A2410;
+  --blue-soft:#111C33;
+  --shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.45);
+  --shadow-lift:0 2px 8px rgba(0,0,0,.6), 0 26px 54px rgba(0,0,0,.6);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:"DM Sans",system-ui,"Segoe UI",Roboto,sans-serif;
+  font-size:14px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+  transition:background .5s ease, color .5s ease;
+}
+h1,h2,h3,h4,.num{font-family:"Sora",system-ui,sans-serif;letter-spacing:-.02em}
+button,input{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer}
+svg{display:block}
+
+::selection{background:var(--yellow);color:#0E0E0E}
+
+/* ============================================================
+   ENTRANCE MOTION
+   ============================================================ */
+.reveal{opacity:0;transform:translateY(18px)}
+body.ready .reveal{animation:rise .78s cubic-bezier(.22,.85,.25,1) forwards;animation-delay:var(--d,0s)}
+@keyframes rise{to{opacity:1;transform:translateY(0)}}
+
+.slide-l{opacity:0;transform:translateX(-26px)}
+body.ready .slide-l{animation:slideL .8s cubic-bezier(.22,.85,.25,1) forwards;animation-delay:var(--d,0s)}
+@keyframes slideL{to{opacity:1;transform:translateX(0)}}
+
+.fade{opacity:0}
+body.ready .fade{animation:fadeIn .9s ease forwards;animation-delay:var(--d,0s)}
+@keyframes fadeIn{to{opacity:1}}
+
+/* ============================================================
+   SHELL
+   ============================================================ */
+.shell{display:flex;min-height:100%;padding:16px;gap:16px}
+
+/* ---------- sidebar ---------- */
+.side{
+  width:var(--sidebar);flex:0 0 var(--sidebar);
+  background:var(--panel);border:1px solid var(--line);border-radius:36px;
+  padding:18px 12px;display:flex;flex-direction:column;gap:20px;
+  position:sticky;top:16px;height:calc(100vh - 32px);
+  z-index:30;
+  box-shadow:var(--shadow);overflow:visible;
+  transition:width .55s var(--ease),flex-basis .55s var(--ease),padding .55s var(--ease),
+             background .5s ease,border-color .5s ease,box-shadow .5s ease,transform .55s var(--ease);
+}
+.side-top{display:flex;align-items:center;padding:0 5px;transition:padding .5s var(--ease)}
+.side-name{display:none;font-family:"Sora";font-size:15px;font-weight:600;letter-spacing:-.03em;white-space:nowrap}
+@keyframes navIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
+.mark{
+  width:34px;height:34px;border-radius:50%;background:var(--yellow);
+  display:grid;place-items:center;color:#0E0E0E;flex:0 0 34px;
+  box-shadow:0 6px 16px rgba(245,197,24,.4);
+}
+
+.nav-label{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);padding:0 10px;margin-bottom:8px;font-weight:500}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{
+  display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:var(--pill);
+  color:var(--text-2);text-decoration:none;font-weight:500;font-size:13.5px;
+  position:relative;
+  transition:color .22s ease,background .22s ease,transform .22s ease,
+             gap .5s var(--ease),padding .5s var(--ease);
+}
+.nav a .lbl{
+  display:inline-block;overflow:hidden;white-space:nowrap;max-width:160px;
+  transition:max-width .5s var(--ease),opacity .28s ease;
+}
+.nav a svg{opacity:.85;transition:transform .35s cubic-bezier(.3,1.4,.5,1)}
+.nav a:hover{color:var(--text);background:var(--chip);transform:translateX(3px)}
+.nav a:hover svg{transform:scale(1.12) rotate(-4deg)}
+.nav a.on{background:var(--yellow);color:#0E0E0E;font-weight:700}
+.nav a.on svg{opacity:1}
+.nav a.on::after{
+  content:"";position:absolute;left:-12px;top:50%;transform:translateY(-50%);
+  width:4px;height:20px;border-radius:0 4px 4px 0;background:var(--ink);
+}
+html[data-theme="dark"] .nav a.on::after{background:var(--yellow)}
+.tag{margin-left:auto;background:#0E0E0E;color:#fff;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:20px;font-family:"Sora"}
+.nav a.on .tag{background:#0E0E0E;color:var(--yellow)}
+html[data-theme="dark"] .tag{background:var(--yellow);color:#0E0E0E}
+
+.promo{
+  margin-top:auto;background:var(--ink);color:#fff;border-radius:26px;padding:18px 16px 16px;
+  position:relative;overflow:hidden;
+}
+.promo::before{
+  content:"";position:absolute;width:150px;height:150px;right:-58px;top:-58px;border-radius:50%;
+  background:radial-gradient(circle at 40% 40%,rgba(245,197,24,.55),transparent 70%);
+  animation:orbit 9s ease-in-out infinite;
+}
+@keyframes orbit{50%{transform:translate(-14px,16px) scale(1.14)}}
+.promo b{display:block;font-family:"Sora";font-size:15px;font-weight:600;margin-bottom:5px;position:relative}
+.promo p{font-size:12.5px;color:#B9B9B2;margin-bottom:14px;position:relative}
+.promo button{
+  width:100%;background:var(--yellow);color:#0E0E0E;font-weight:700;font-size:13px;
+  padding:10px;border-radius:var(--pill);position:relative;transition:transform .25s ease,box-shadow .25s ease;
+}
+.promo button:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(245,197,24,.35)}
+
+/* ============================================================
+   COLLAPSED RAIL STATE
+   ============================================================ */
+body.rail .side{padding:12px;gap:16px}
+body.rail .side-top{justify-content:center;padding:0}
+body.rail .nav a{justify-content:center;gap:0;padding:0;width:48px;height:48px;margin:0 auto;border-radius:50%}
+body.rail .nav a .lbl{max-width:0;opacity:0}
+body.rail .nav a:hover{transform:translateY(-2px)}
+body.rail .nav a.on::after{display:none}
+
+/* section headings become hairlines */
+body.rail .nav-label{
+  height:1px;padding:0;margin:0 14px 12px;overflow:hidden;
+  color:transparent;background:var(--line);border-radius:1px;
+}
+
+/* the badge shrinks into a dot */
+body.rail .tag{
+  position:absolute;top:7px;right:9px;margin:0;padding:0;
+  width:8px;height:8px;border-radius:50%;font-size:0;
+}
+
+/* hover labels */
+body.rail .nav a::before,
+body.rail .promo-mini::before{
+  content:attr(data-tip);
+  position:absolute;left:calc(100% + 12px);top:50%;
+  transform:translateY(-50%) translateX(-6px);
+  background:var(--ink);color:#fff;font-family:"Sora";font-size:12px;font-weight:600;
+  padding:7px 12px;border-radius:var(--pill);white-space:nowrap;letter-spacing:-.01em;
+  opacity:0;pointer-events:none;z-index:150;
+  box-shadow:0 10px 24px rgba(14,14,14,.24);
+  transition:opacity .2s ease,transform .28s var(--ease);
+}
+body.rail .nav a:hover::before,
+body.rail .promo-mini:hover::before{opacity:1;transform:translateY(-50%) translateX(0)}
+html[data-theme="dark"] body.rail .nav a::before,
+html[data-theme="dark"] body.rail .promo-mini::before{background:var(--yellow);color:#0E0E0E}
+
+/* promo swaps for a single bubble */
+.promo{transition:opacity .3s ease,transform .4s var(--ease)}
+.promo-mini{
+  display:none;position:relative;margin:auto auto 0;width:48px;height:48px;border-radius:50%;
+  background:var(--yellow);color:#0E0E0E;place-items:center;flex:0 0 48px;
+  box-shadow:0 8px 20px rgba(245,197,24,.34);
+  transition:transform .3s cubic-bezier(.3,1.4,.5,1),box-shadow .3s ease;
+}
+.promo-mini:hover{transform:translateY(-3px) scale(1.05)}
+body.rail .promo{display:none}
+body.rail .promo-mini{display:grid}
+
+/* hamburger */
+.hamb{flex:0 0 38px}
+.hamb svg{transition:transform .5s var(--ease)}
+body.rail .hamb svg{transform:rotate(90deg)}
+
+/* mobile overlay backdrop */
+.backdrop{
+  position:fixed;inset:0;background:rgba(14,14,14,.5);backdrop-filter:blur(3px);
+  opacity:0;pointer-events:none;z-index:40;transition:opacity .45s ease;
+}
+
+/* ============================================================
+   SPLASH
+   ============================================================ */
+.splash{
+  position:fixed;inset:0;z-index:200;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  transition:opacity .5s ease,visibility .5s ease;
+}
+.splash.done{opacity:0;visibility:hidden}
+.splash .mark{width:56px;height:56px;border-radius:50%;flex:none}
+.splash .mark svg{width:26px;height:26px}
+.splash b{font-family:"Sora";font-size:19px;font-weight:600;letter-spacing:-.03em;margin-top:2px}
+.splash small{color:var(--text-3);font-size:12px}
+.splash-bar{width:168px;height:3px;border-radius:3px;background:var(--line);overflow:hidden}
+.splash-bar i{display:block;height:100%;width:0;background:var(--ink);border-radius:3px;transition:width .35s linear}
+html[data-theme="dark"] .splash-bar i{background:var(--yellow)}
+
+/* ---------- main column ---------- */
+.main{flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--gap)}
+
+.topbar{
+  display:flex;align-items:center;gap:14px;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 16px;
+  box-shadow:var(--shadow);transition:background .5s ease,border-color .5s ease;
+}
+.search{
+  flex:1;display:flex;align-items:center;gap:10px;background:var(--panel-2);
+  border:1px solid transparent;border-radius:var(--pill);padding:9px 14px;max-width:420px;
+  transition:border-color .3s ease,background .3s ease;
+}
+.search:focus-within{border-color:var(--yellow);background:var(--panel)}
+.search input{border:0;outline:0;background:none;width:100%;font-size:13.5px}
+.search input::placeholder{color:var(--text-3)}
+.kbd{font-family:"Sora";font-size:11px;color:var(--text-3);background:var(--chip);border-radius:var(--pill);padding:2.5px 7px;white-space:nowrap}
+
+.tools{display:flex;align-items:center;gap:6px;margin-left:auto}
+.icon-btn{
+  width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:var(--text-2);
+  position:relative;transition:background .22s ease,color .22s ease,transform .22s ease;
+}
+.icon-btn:hover{background:var(--chip);color:var(--text);transform:translateY(-2px)}
+/* phone only controls, kept off wide screens */
+.icon-btn.topmenu,.icon-btn.searchbtn{display:none}
+.dot{position:absolute;top:8px;right:9px;width:7px;height:7px;border-radius:50%;background:var(--blue);border:2px solid var(--panel)}
+.dot.warn{background:var(--yellow)}
+
+.who{display:flex;align-items:center;gap:10px;padding-left:12px;margin-left:6px;border-left:1px solid var(--line)}
+.avatar{width:38px;height:38px;border-radius:50%;overflow:hidden;flex:0 0 38px;position:relative;background:var(--yellow-soft)}
+.avatar svg{width:100%;height:100%}
+.who small{display:block;color:var(--text-3);font-size:11.5px}
+.who b{font-size:13.5px;font-family:"Sora";font-weight:600}
+.who .txt{line-height:1.25}
+
+/* ---------- page head ---------- */
+.head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:4px 4px 0}
+.head h1{font-size:32px;font-weight:600}
+.head p{color:var(--text-2);font-size:13.5px;margin-top:3px}
+.head .acts{margin-left:auto;display:flex;gap:9px}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;padding:11px 19px;border-radius:var(--pill);
+  font-weight:600;font-size:13.5px;transition:transform .25s cubic-bezier(.3,1.3,.5,1),box-shadow .25s ease,background .25s ease;
+}
+.btn.solid{background:var(--yellow);color:#0E0E0E;box-shadow:0 8px 20px rgba(245,197,24,.28)}
+.btn.solid:hover{transform:translateY(-3px);box-shadow:0 14px 28px rgba(245,197,24,.42)}
+.btn.ghost{border:1px solid var(--line);background:var(--panel);color:var(--text)}
+.btn.ghost:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+
+/* ============================================================
+   GRID + CARDS
+   ============================================================ */
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--gap)}
+.card{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;
+  box-shadow:var(--shadow);position:relative;overflow:hidden;
+  transition:transform .4s cubic-bezier(.2,.9,.3,1),box-shadow .4s ease,background .5s ease,border-color .5s ease;
+}
+.card:hover{transform:translateY(-5px);box-shadow:var(--shadow-lift)}
+.card h3{font-size:15.5px;font-weight:600}
+.card-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.card-head .right{margin-left:auto;display:flex;align-items:center;gap:7px}
+
+.pill-btn{font-size:12px;font-weight:600;color:var(--text-2);background:var(--chip);border-radius:20px;padding:6px 12px;display:inline-flex;align-items:center;gap:5px;transition:background .22s,color .22s}
+.pill-btn:hover{background:var(--yellow);color:#0E0E0E}
+
+/* ---------- stat cards ---------- */
+.stat .top{display:flex;align-items:flex-start;gap:10px;margin-bottom:14px}
+.stat .top span{font-size:13.5px;font-weight:600;color:var(--text-2)}
+.stat .go{
+  margin-left:auto;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);
+  display:grid;place-items:center;color:var(--text-2);flex:0 0 30px;
+  transition:transform .35s cubic-bezier(.3,1.4,.5,1),background .3s,color .3s,border-color .3s;
+}
+.card:hover .go{transform:rotate(45deg);background:var(--ink);color:#fff;border-color:var(--ink)}
+.stat .num{font-size:42px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.trend{display:inline-flex;align-items:center;gap:6px;margin-top:14px;font-size:11.5px;font-weight:500;color:var(--text-2)}
+.trend i{
+  width:19px;height:19px;border-radius:50%;background:var(--chip);display:grid;place-items:center;
+  font-style:normal;color:var(--text)
+}
+.stat.hero{background:var(--yellow);border-color:var(--yellow)}
+.stat.hero .top span,.stat.hero .num,.stat.hero .trend{color:#0E0E0E}
+.stat.hero .go{border-color:rgba(14,14,14,.28);color:#0E0E0E}
+.stat.hero:hover .go{background:#0E0E0E;color:var(--yellow);border-color:#0E0E0E}
+.stat.hero .trend i{background:rgba(14,14,14,.14);color:#0E0E0E}
+.spark{position:absolute;right:0;bottom:0;width:150px;height:64px;opacity:.5;pointer-events:none}
+.spark path{stroke:#0E0E0E;stroke-width:2.5;fill:none;stroke-linecap:round;
+  stroke-dasharray:var(--len,400);stroke-dashoffset:var(--len,400)}
+body.ready .spark path{animation:draw 1.5s cubic-bezier(.4,0,.2,1) .55s forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+
+/* ---------- chart ---------- */
+.span2{grid-column:span 2}
+.span3{grid-column:span 3}
+
+.chart{display:flex;align-items:stretch;gap:12px;height:206px;padding-top:8px}
+.col{flex:1;display:flex;flex-direction:column;gap:10px;min-width:0}
+.track{flex:1;position:relative;min-height:0}
+.bar{
+  position:absolute;bottom:0;left:0;right:0;margin:0 auto;
+  width:100%;max-width:52px;border-radius:26px;
+  height:0;
+  background:repeating-linear-gradient(115deg,var(--chip) 0 6px,transparent 6px 12px);
+  border:1px solid var(--line);
+  transition:height .95s cubic-bezier(.2,.9,.25,1) var(--d,0s),filter .3s ease;
+}
+.bar.fill{background:var(--yellow);border-color:var(--yellow)}
+.bar.fill.deep{background:var(--ink);border-color:var(--ink)}
+html[data-theme="dark"] .bar.fill.deep{background:#3A3A31;border-color:#3A3A31}
+.bar.fill.blue{background:var(--blue);border-color:var(--blue)}
+.col:hover .bar{filter:brightness(.94)}
+.col > span{font-size:12px;color:var(--text-3);font-weight:500;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tip{
+  position:absolute;top:-14px;left:50%;transform:translate(-50%,6px) scale(.86);opacity:0;
+  background:var(--ink);color:#fff;font-family:"Sora";font-size:11px;font-weight:600;
+  padding:5px 10px;border-radius:var(--pill);white-space:nowrap;pointer-events:none;
+}
+.chart.play .tip.auto{animation:pop .5s cubic-bezier(.3,1.5,.5,1) var(--td,1.4s) forwards}
+@keyframes pop{to{opacity:1;transform:translate(-50%,0) scale(1)}}
+.col:hover .tip{opacity:1;transform:translate(-50%,0) scale(1)}
+.sub{font-size:12.5px;color:var(--text-2);margin-top:3px}
+.sub b{color:var(--text);font-weight:600}
+
+.seg{display:inline-flex;gap:2px;background:var(--chip);border-radius:var(--pill);padding:3px}
+.seg button{
+  font-size:12px;font-weight:600;color:var(--text-2);padding:6px 14px;border-radius:var(--pill);
+  transition:background .25s ease,color .25s ease;
+}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:var(--panel);color:var(--text);box-shadow:0 2px 6px rgba(14,14,14,.08)}
+html[data-theme="dark"] .seg button.on{background:var(--yellow);color:#0E0E0E}
+
+.chart.dense{gap:6px}
+.chart.dense .bar{max-width:24px}
+.chart.dense .col span{font-size:10px}
+
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.legend i{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:7px}
+.legend span{font-size:12px;color:var(--text-2);display:inline-flex;align-items:center}
+
+/* ---------- reminder ---------- */
+.reminder h4{font-size:17px;font-weight:600;line-height:1.3;margin-bottom:6px}
+.reminder .when{font-size:12.5px;color:var(--text-2);margin-bottom:16px}
+.reminder .when b{color:var(--text);font-weight:600}
+.start{
+  width:100%;background:var(--ink);color:#fff;border-radius:var(--pill);padding:12px;font-weight:600;font-size:13.5px;
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  transition:transform .25s ease,box-shadow .25s ease,background .3s;
+}
+html[data-theme="dark"] .start{background:var(--yellow);color:#0E0E0E}
+.start:hover{transform:translateY(-3px);box-shadow:0 14px 26px rgba(14,14,14,.22)}
+
+/* ---------- list ---------- */
+.list{display:flex;flex-direction:column;gap:3px}
+.row{display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:var(--pill);transition:background .22s ease,transform .22s ease}
+.row:hover{background:var(--panel-2);transform:translateX(3px)}
+.ic{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;flex:0 0 34px}
+.ic.y{background:var(--yellow-soft);color:#8A6D00}
+.ic.b{background:var(--blue-soft);color:var(--blue)}
+.ic.k{background:var(--chip);color:var(--text)}
+html[data-theme="dark"] .ic.y{color:var(--yellow)}
+.row .txt{min-width:0;flex:1}
+.row b{display:block;font-size:13.5px;font-weight:600;font-family:"Sora";white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row small{color:var(--text-3);font-size:11.5px}
+.status{font-size:11px;font-weight:700;padding:5px 10px;border-radius:20px;white-space:nowrap}
+.s-done{background:var(--blue-soft);color:var(--blue)}
+.s-wait{background:var(--yellow-soft);color:#8A6D00}
+.s-live{background:var(--chip);color:var(--text-2)}
+html[data-theme="dark"] .s-wait{color:var(--yellow)}
+.face{width:34px;height:34px;border-radius:50%;flex:0 0 34px;overflow:hidden}
+
+/* ---------- gauge ---------- */
+.gauge-wrap{display:flex;flex-direction:column;align-items:center}
+.gauge{width:100%;max-width:250px}
+.gauge .track{fill:none;stroke:var(--chip);stroke-width:26;stroke-linecap:round}
+.gauge .fillArc{fill:none;stroke:var(--yellow);stroke-width:26;stroke-linecap:round}
+.gauge .fillArc2{fill:none;stroke:var(--blue);stroke-width:26;stroke-linecap:round;opacity:.9}
+.gauge-val{text-align:center;margin-top:-58px;position:relative;z-index:2;pointer-events:none}
+.gauge-val b{font-family:"Sora";font-size:36px;font-weight:600;font-variant-numeric:tabular-nums}
+.gauge-val small{display:block;color:var(--text-3);font-size:11.5px;margin-top:2px}
+
+/* ---------- timer ---------- */
+.timer{background:var(--ink);border-color:var(--ink);color:#fff;overflow:hidden}
+.timer::after{
+  content:"";position:absolute;inset:auto -30% -60% -30%;height:180px;
+  background:radial-gradient(ellipse at 50% 100%,rgba(245,197,24,.28),transparent 65%);
+  animation:breathe 6s ease-in-out infinite;
+}
+@keyframes breathe{50%{transform:translateY(-14px) scale(1.08)}}
+.timer h3{color:#fff}
+.clock{font-family:"Sora";font-size:38px;font-weight:600;font-variant-numeric:tabular-nums;position:relative;z-index:1;letter-spacing:-.03em}
+.timer small{color:#9C9C95;font-size:11.5px;position:relative;z-index:1}
+.ctrl{display:flex;gap:10px;margin-top:18px;position:relative;z-index:1}
+.ctrl button{
+  width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);color:#fff;
+  transition:transform .25s cubic-bezier(.3,1.4,.5,1),background .25s;
+}
+.ctrl button:hover{transform:scale(1.1);background:rgba(255,255,255,.2)}
+.ctrl button.stop{background:var(--yellow);color:#0E0E0E}
+.ctrl button.stop:hover{background:#ffd83d}
+
+/* ---------- meter rows ---------- */
+.meter{height:8px;border-radius:20px;background:var(--chip);overflow:hidden;margin-top:8px}
+.meter i{display:block;height:100%;border-radius:20px;width:0;background:var(--yellow);
+  transition:width 1.4s cubic-bezier(.2,.9,.25,1)}
+.meter i.blue{background:var(--blue)}
+.meter i.ink{background:var(--ink)}
+html[data-theme="dark"] .meter i.ink{background:#4A4A40}
+
+/* ---------- footer note ---------- */
+.foot{text-align:center;color:var(--text-3);font-size:11.5px;padding:6px 0 10px}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width:1180px){
+  .grid{grid-template-columns:repeat(2,1fr)}
+  .span2,.span3{grid-column:span 2}
+}
+@media (max-width:900px){
+  .shell{padding:12px;gap:12px}
+  .head h1{font-size:26px}
+  .who .txt{display:none}
+  /* expanded on a small screen floats over the page, still on the left */
+  body:not(.rail) .side{
+    position:fixed;left:12px;top:12px;bottom:12px;height:auto;z-index:60;
+    box-shadow:0 30px 70px rgba(14,14,14,.3);
+  }
+  body:not(.rail) .backdrop{opacity:1;pointer-events:auto}
+}
+@media (max-width:640px){
+  body{--rail:72px}
+  .grid{grid-template-columns:1fr}
+  .span2,.span3{grid-column:span 1}
+  .head .acts{width:100%}
+  .btn{flex:1;justify-content:center}
+  .chart{height:170px;gap:7px}
+  .shell{padding:12px}
+
+  /* one row: menu, search, alerts, profile */
+  .topbar{flex-wrap:wrap;gap:8px;padding:10px 12px}
+  .icon-btn.topmenu,.icon-btn.searchbtn{display:grid}
+  .icon-btn.bell{display:none}
+  .search{display:none;order:9;flex:1 0 100%;max-width:none;margin-top:2px}
+  body.searching .search{display:flex}
+  body.searching .searchbtn{background:var(--yellow);color:#0E0E0E}
+  .kbd{display:none}
+
+  /* the sidebar is out of the flow entirely until it is called */
+  body.ready .side.slide-l{animation:none}
+  .side{
+    position:fixed;left:12px;top:12px;bottom:auto;
+    width:48px;height:48px;flex:none;padding:0;gap:0;
+    border-radius:50%;overflow:hidden;z-index:120;
+    opacity:0;transform:scale(.55);transform-origin:top left;pointer-events:none;
+    box-shadow:0 26px 60px rgba(14,14,14,.34);
+    transition:width .48s var(--ease),height .48s var(--ease),border-radius .48s var(--ease),
+               padding .48s var(--ease),gap .48s var(--ease),opacity .3s ease,
+               transform .48s var(--ease),background .5s ease,border-color .5s ease;
+  }
+  .side-top{width:auto;height:46px;flex:none;justify-content:flex-start;gap:9px;padding:0 2px}
+  .side .nav-label,.side .nav{opacity:0;transition:opacity .18s ease}
+  .side .promo,.side .promo-mini{display:none}
+  body.rail .hamb svg{transform:none}
+
+  /* tapping the menu grows the panel out of that corner */
+  body:not(.rail) .side{
+    width:calc(100vw - 24px);max-width:270px;height:auto;
+    padding:8px 12px 14px;gap:12px;border-radius:30px;
+    opacity:1;transform:scale(1);pointer-events:auto;
+  }
+  body:not(.rail) .side-name{display:inline-block}
+  body:not(.rail) .side .nav-label,
+  body:not(.rail) .side .nav{opacity:1;transition:opacity .3s ease .16s}
+  body:not(.rail) .nav a{animation:navIn .42s var(--ease) backwards}
+  body:not(.rail) .nav a:nth-child(1){animation-delay:.14s}
+  body:not(.rail) .nav a:nth-child(2){animation-delay:.19s}
+  body:not(.rail) .nav a:nth-child(3){animation-delay:.24s}
+  body:not(.rail) .nav a:nth-child(4){animation-delay:.29s}
+  body:not(.rail) .nav a:nth-child(5){animation-delay:.34s}
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .reveal,.slide-l,.fade{opacity:1!important;transform:none!important}
+  .bar{transition:none!important}
+  .tip{opacity:1!important;transform:translate(-50%,0)!important}
+  .spark path{stroke-dashoffset:0!important}
+}
+:focus-visible{outline:3px solid var(--blue);outline-offset:3px;border-radius:8px}
+
+/* ============================================================
+   MARU QUICK OPERATIONS: additions on top of the template
+   ============================================================ */
+:root{
+  --good:#0F7B4D; --good-soft:#E3F4EC;
+  --bad:#C0352B;  --bad-soft:#FBE7E5;
+  --warn-ink:#7A5B00;
+}
+html[data-theme="dark"]{
+  --good:#4CC38A; --good-soft:#11291E;
+  --bad:#FF7A6E;  --bad-soft:#331512;
+  --warn-ink:var(--yellow);
+}
+body{font-size:14.5px}
+.num,.tab{font-variant-numeric:tabular-nums}
+
+/* brand slot in the sidebar: the logo file replaces .mark later */
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand img{height:30px;width:auto;display:block}
+.brand .logo-dark{display:none}
+html[data-theme="dark"] .brand .logo-light{display:none}
+html[data-theme="dark"] .brand .logo-dark{display:block}
+.brand-name{font-family:"Sora";font-size:15px;font-weight:600;letter-spacing:-.03em;white-space:nowrap}
+.brand-name small{display:block;font-family:"DM Sans";font-size:11px;font-weight:500;color:var(--text-3);letter-spacing:0}
+body.rail .brand-name{display:none}
+.side-top{gap:8px}
+
+/* integrity strip */
+.strip{
+  display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:14px 20px;box-shadow:var(--shadow);
+}
+.strip .ok{display:inline-flex;align-items:center;gap:9px;font-family:"Sora";font-weight:600;font-size:15px}
+.strip .ok i{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--good-soft);color:var(--good)}
+.strip .fact{color:var(--text-2);font-size:13px;display:inline-flex;align-items:center;gap:7px}
+.strip .fact b{color:var(--text);font-weight:600}
+.strip .fresh{margin-left:auto;font-size:12px;color:var(--text-3);display:inline-flex;align-items:center;gap:7px}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 0 0 rgba(15,123,77,.5);animation:pulse 2.4s ease-out infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 8px rgba(15,123,77,0)}100%{box-shadow:0 0 0 0 rgba(15,123,77,0)}}
+.fresh.stale .pulse{background:var(--yellow);animation:none}
+
+/* status chips: icon + text, never colour alone */
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:5px 11px;border-radius:20px;white-space:nowrap}
+.chip svg{flex:none}
+.c-good{background:var(--good-soft);color:var(--good)}
+.c-bad{background:var(--bad-soft);color:var(--bad)}
+.c-warn{background:var(--yellow-soft);color:var(--warn-ink)}
+.c-info{background:var(--blue-soft);color:var(--blue)}
+.c-mute{background:var(--chip);color:var(--text-2)}
+
+/* KPI tweaks */
+.stat .unit{font-size:20px;font-weight:600;margin-right:2px;vertical-align:top;position:relative;top:6px}
+.stat .num{font-size:38px}
+.stat .line{margin-top:12px;font-size:12.5px;color:var(--text-2)}
+.stat .line b{color:var(--text);font-weight:600}
+.stat.hero .line,.stat.hero .line b{color:#0E0E0E}
+.thresh{position:relative;height:8px;border-radius:8px;background:rgba(14,14,14,.14);margin-top:14px}
+.thresh i{position:absolute;left:0;top:0;bottom:0;border-radius:8px;background:#0E0E0E;width:0;transition:width 1s cubic-bezier(.2,.9,.25,1)}
+.thresh em{position:absolute;top:-4px;bottom:-4px;width:2px;background:#0E0E0E;opacity:.55}
+.stat.alert{border-color:var(--bad)}
+.stat.alert .num{color:var(--bad)}
+
+/* head actions */
+.btn.solid .count{background:#0E0E0E;color:var(--yellow);border-radius:20px;padding:1px 8px;font-size:12px}
+.viewer-on .op-only{display:none!important}
+.viewer-badge{display:none}
+.viewer-on .viewer-badge{display:inline-flex}
+
+/* stacked channel bars */
+.bar.stack{background:none;border:0;display:flex;flex-direction:column-reverse;overflow:hidden;gap:2px;border-radius:12px;max-width:44px}
+.bar.stack b{display:block;width:100%;flex:none;border-radius:3px}
+.k-web{background:var(--ink)} .k-app{background:var(--blue)} .k-pos{background:var(--yellow)} .k-ussd{background:#8C8C84}
+html[data-theme="dark"] .k-web{background:#E8E8E0}
+
+/* BPC link (dark card) */
+.link{background:var(--ink);border-color:var(--ink);color:#fff}
+html[data-theme="dark"] .link{background:#1C1C18;border-color:#2E2E26}
+.link h3{color:#fff}
+.link .kv{display:grid;grid-template-columns:1fr auto;gap:9px 12px;font-size:13px;margin-top:4px}
+.link .kv span{color:#B4B4AC;white-space:nowrap}
+.link .kv b{font-weight:600;text-align:right}
+.link .rule{height:1px;background:rgba(255,255,255,.12);margin:14px 0}
+.link .note{font-size:11.5px;color:#9C9C95;margin-top:10px}
+.link .chip.c-good{background:rgba(76,195,138,.16);color:#6FE0A8}
+
+/* attention list */
+.att .row{border-radius:16px;align-items:center}
+.att .row .meta{margin-left:auto;display:flex;align-items:center;gap:10px}
+.att .age{font-size:12px;color:var(--text-3);white-space:nowrap}
+.empty{display:flex;align-items:center;gap:12px;padding:16px;border-radius:16px;background:var(--panel-2);color:var(--text-2);font-size:13px}
+
+/* state funnel */
+.funnel{display:flex;flex-direction:column;gap:10px}
+.fn{display:grid;grid-template-columns:118px 1fr 46px;align-items:center;gap:10px;font-size:12.5px}
+.fn span{color:var(--text-2);white-space:nowrap}
+.fn .bar2{height:10px;border-radius:10px;background:var(--chip);overflow:hidden}
+.fn .bar2 i{display:block;height:100%;width:0;border-radius:10px;transition:width 1s cubic-bezier(.2,.9,.25,1)}
+.fn b{text-align:right;font-weight:600}
+.fn.branch span{padding-left:14px;position:relative}
+.fn.branch span::before{content:"";position:absolute;left:3px;top:50%;width:7px;height:1px;background:var(--text-3)}
+
+/* workers */
+.wk{display:grid;grid-template-columns:auto 1fr auto;gap:6px 12px;align-items:center;font-size:12.5px}
+.wk .id{font-family:"Sora";font-weight:600}
+.wk .meter{margin-top:0}
+
+/* audit */
+.audit .row b{font-family:"DM Sans";font-weight:600}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px}
+
+/* districts */
+.dist{display:flex;flex-direction:column;gap:8px}
+.dist div{display:flex;align-items:center;gap:10px;font-size:13px}
+.dist div span:first-child{flex:1}
+
+.sample{font-size:11px;font-weight:600;color:var(--text-3);background:var(--chip);border-radius:20px;padding:3px 9px}
+
+.grid.g3{grid-template-columns:2fr 1fr 1fr}
+@media (max-width:1180px){.grid.g3{grid-template-columns:1fr 1fr}.grid.g3>.span2{grid-column:span 2}}
+@media (max-width:640px){.att .row{flex-wrap:wrap}.att .row .meta{margin-left:0;width:100%;justify-content:space-between}.card-head{flex-wrap:wrap}.card-head .right{margin-left:0}.seg button{padding:6px 10px}}
+@media (max-width:640px){.grid.g3{grid-template-columns:1fr}.grid.g3>.span2{grid-column:span 1}.strip .fresh{margin-left:0}.fn{grid-template-columns:100px 1fr 40px}}
+</style>
+</head>
+<body>
+<a href="#main" class="sample" style="position:absolute;left:-9999px" onfocus="this.style.left='16px';this.style.top='16px'" onblur="this.style.left='-9999px'">Skip to content</a>
+<div class="backdrop" id="backdrop" aria-hidden="true"></div>
+
+<div class="shell">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="side">
+    <div class="side-top">
+      <button class="icon-btn hamb" id="menu" aria-label="Collapse menu" aria-expanded="true" title="Collapse menu">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+      </button>
+      <!-- BRAND SLOT: replace the .mark with <img class="logo-light" src="logo.svg"> + <img class="logo-dark" src="logo-dark.svg"> -->
+      <div class="brand">
+        <span class="mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span>
+        <span class="brand-name">Maru Quick<small>Operations</small></span>
+      </div>
+    </div>
+
+    <div>
+      <p class="nav-label">Monitor</p>
+      <nav class="nav" aria-label="Main">
+        <a href="#" class="on" data-tip="Overview" aria-current="page"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg><span class="lbl">Overview</span></a>
+        <a href="#" data-tip="Sales"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg><span class="lbl">Sales</span></a>
+        <a href="#" data-tip="Exceptions"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span class="lbl">Exceptions</span><span class="tag" id="navExc">0</span></a>
+        <a href="#" data-tip="Float"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg><span class="lbl">Float</span></a>
+        <a href="#" data-tip="Workers"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01"/><path d="M6 18h.01"/></svg><span class="lbl">Workers</span></a>
+      </nav>
+    </div>
+
+    <div>
+      <p class="nav-label">Records</p>
+      <nav class="nav" aria-label="Records">
+        <a href="#" data-tip="Audit log"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg><span class="lbl">Audit log</span></a>
+        <a href="#" data-tip="Reports"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h8"/><path d="M8 17h5"/></svg><span class="lbl">Reports</span></a>
+        <a href="#" data-tip="Settings" class="op-only"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg><span class="lbl">Settings</span></a>
+      </nav>
+    </div>
+
+    <div style="margin-top:auto">
+      <nav class="nav" aria-label="Account">
+        <a href="#" data-tip="Sign out"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span class="lbl">Sign out</span></a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main" id="main">
+
+    <header class="topbar">
+      <button class="icon-btn topmenu" id="topmenu" aria-label="Open menu"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg></button>
+      <button class="icon-btn searchbtn" id="searchbtn" aria-label="Search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></button>
+      <label class="search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-3)"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="q" type="search" placeholder="Meter number, receipt or sale ID" aria-label="Find a sale by meter number, receipt or sale ID">
+        <span class="kbd">Ctrl K</span>
+      </label>
+
+      <div class="tools">
+        <span class="chip c-good" id="siteChip" title="Active site and BPC endpoint"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>Primary site · BPC primary</span>
+        <button class="icon-btn" id="viewer" aria-pressed="false" aria-label="Switch to BPC viewer (read-only) mode" title="BPC viewer mode"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button class="icon-btn" id="theme" aria-label="Toggle dark mode" title="Toggle dark mode">
+          <svg id="ico-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+          <svg id="ico-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:none"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+        </button>
+        <div class="who">
+          <div class="avatar" aria-hidden="true"><svg viewBox="0 0 48 48"><rect width="48" height="48" fill="#F5C518"/><circle cx="24" cy="19" r="8" fill="#0E0E0E"/><path d="M8 46c2-9 8-13 16-13s14 4 16 13z" fill="#0E0E0E"/></svg></div>
+          <div class="txt"><b id="whoName">Operations</b><small id="whoRole">Maru Quick · operator</small></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- integrity strip: the first thing an evaluator reads -->
+    <section class="strip reveal" aria-label="Integrity">
+      <span class="ok"><i><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></i><span><span id="lost">0</span> lost · <span id="dupes">0</span> double tokens</span></span>
+      <span class="fact">Tokens issued <b class="tab" id="issued">0</b> = sales succeeded <b class="tab" id="succ">0</b></span>
+      <span class="fact">Reconciled with BPC <b id="recon">06:00</b></span>
+      <span class="fact"><a href="#" style="color:var(--blue);font-weight:600">Audit log</a></span>
+      <span class="fresh" id="fresh" role="status" aria-live="polite"><span class="pulse"></span><span id="freshTxt">Updated just now</span></span>
+    </section>
+
+    <!-- page head -->
+    <div class="head reveal">
+      <div>
+        <h1>Today at a glance</h1>
+        <p>BPC prepaid electricity sales across web, app, POS and USSD. <span class="sample">Sample data</span> <span class="chip c-info viewer-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg>BPC viewer · read only</span></p>
+      </div>
+      <div class="acts">
+        <button class="btn solid op-only" id="review"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Review exceptions <span class="count" id="excCount">0</span></button>
+        <button class="btn ghost"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>Reconciliation CSV</button>
+      </div>
+    </div>
+
+    <!-- KPI row -->
+    <section class="grid" aria-label="Key figures">
+      <article class="card stat hero reveal">
+        <div class="top"><span>Float available</span></div>
+        <p class="num"><span class="unit">P</span><span data-money="float.available">0</span></p>
+        <div class="thresh" aria-hidden="true"><i id="floatBar"></i><em id="floatMark"></em></div>
+        <p class="line"><b id="floatPct">0%</b> of last deposit · alert below <b id="floatAlert">20%</b> · <b>P<span data-money="float.reserved">0</span></b> held for sales in flight</p>
+      </article>
+
+      <article class="card stat reveal">
+        <div class="top"><span>Sales today</span></div>
+        <p class="num"><span class="unit">P</span><span data-money="today.value">0</span></p>
+        <p class="line"><b class="tab" id="todayCount">0</b> tokens · success rate <b id="okRate">0%</b></p>
+      </article>
+
+      <article class="card stat reveal">
+        <div class="top"><span>In flight</span></div>
+        <p class="num" id="inflight">0</p>
+        <p class="line">With BPC now · <b id="inflightOld">0</b> older than 30 s</p>
+      </article>
+
+      <article class="card stat reveal" id="excCard">
+        <div class="top"><span>Exceptions</span><span id="excChip"></span></div>
+        <p class="num" id="excNum">0</p>
+        <p class="line"><b id="excUnknown">0</b> recovering · <b id="excReview">0</b> manual review · <b id="excFailed">0</b> failed</p>
+      </article>
+    </section>
+
+    <!-- channels + BPC link -->
+    <section class="grid">
+      <article class="card span2 reveal">
+        <div class="card-head">
+          <div><h3>Sales by channel</h3><p class="sub" id="chartSub"></p></div>
+          <div class="right">
+            <div class="seg" id="seg" role="tablist" aria-label="Period">
+              <button class="on" data-range="today" type="button" role="tab" aria-selected="true">Today</button>
+              <button data-range="d7" type="button" role="tab" aria-selected="false">7 days</button>
+              <button data-range="d30" type="button" role="tab" aria-selected="false">30 days</button>
+            </div>
+          </div>
+        </div>
+        <div class="chart" id="chart" role="img" aria-label="Sales by channel"></div>
+        <div class="legend">
+          <span><i class="k-web"></i>Web store</span>
+          <span><i class="k-app"></i>App</span>
+          <span><i class="k-pos"></i>Merchant POS</span>
+          <span><i class="k-ussd"></i>USSD</span>
+        </div>
+      </article>
+
+      <article class="card link reveal">
+        <div class="card-head"><h3>BPC link</h3><div class="right"><span class="chip c-good"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>Connected</span></div></div>
+        <div class="kv">
+          <span>Endpoint</span><b>Primary</b>
+          <span>Protocol</span><b>XMLVend 2.1 · mTLS</b>
+          <span>Active site</span><b>Primary · DR ready</b>
+          <span>Terminals online</span><b class="tab">4 of 4</b>
+          <span>Submission rate</span><b class="tab">5 / s</b>
+        </div>
+        <div class="rule"></div>
+        <div class="kv">
+          <span>BPC exchange, p95</span><b class="tab">0.80 s</b>
+          <span>Lost response recovered</span><b class="tab">9.3–9.9 s</b>
+          <span>Crash recovery</span><b class="tab">11.2 s</b>
+        </div>
+        <p class="note">Timings measured on the sample stack, 22 Nov 2026 (simulator, 200 sales). Live figures replace these once connected to BPC's test endpoint.</p>
+      </article>
+
+      <article class="card reveal">
+        <div class="card-head"><h3>Sale states today</h3></div>
+        <div class="funnel" id="funnel"></div>
+      </article>
+    </section>
+
+    <!-- attention + workers + float + audit -->
+    <section class="grid">
+      <article class="card span2 att reveal">
+        <div class="card-head"><div><h3>Needs attention</h3><p class="sub">Oldest first. Money stays held until each one is resolved.</p></div><div class="right"><button class="pill-btn op-only">Open all</button></div></div>
+        <div class="list" id="attention"></div>
+      </article>
+
+      <article class="card reveal">
+        <div class="card-head"><h3>Workers</h3><div class="right"><span class="sample">1 request each</span></div></div>
+        <div class="wk" id="workers"></div>
+      </article>
+
+      <article class="card reveal">
+        <div class="card-head"><h3>Districts</h3></div>
+        <div class="dist" id="districts"></div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card span2 audit reveal">
+        <div class="card-head"><h3>Audit log</h3><div class="right"><button class="pill-btn">Full log</button></div></div>
+        <div class="list" id="audit"></div>
+      </article>
+      <article class="card span2 reveal">
+        <div class="card-head"><h3>Float movements</h3><div class="right"><button class="pill-btn op-only">Record deposit</button></div></div>
+        <div class="list" id="ledger"></div>
+      </article>
+    </section>
+
+    <p class="foot">Maru Quick Operations · vending to BPC over XMLVend 2.1 (NRS 009-6-10). Sample data for demonstration.</p>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- sample data: replace with GET /bpc/api/overview ---------- */
+  var D = {
+    float:{ available: 8743200, reserved: 15000, lastDeposit: 10000000, alertPct: 20 },
+    today:{ value: 1256800, count: 214, succeeded: 211, issued: 211, failed: 2 },
+    states:[
+      { k:"SUCCEEDED", n:211, tone:"good" }, { k:"SUBMITTED", n:2, tone:"info" },
+      { k:"RESERVED", n:1, tone:"info" }, { k:"UNKNOWN", n:1, tone:"warn", side:1 },
+      { k:"MANUAL_REVIEW", n:0, tone:"bad", side:1 }, { k:"FAILED", n:2, tone:"bad", side:1 },
+      { k:"EXPIRED", n:5, tone:"mute", side:1 }
+    ],
+    inflightOld: 0,
+    attention:[
+      { st:"UNKNOWN", receipt:"MQ-260823-0187", meter:"04040404040", amt:5000, ch:"USSD", age:"14 s", why:"Response lost; asking BPC for the last response" },
+      { st:"FAILED", receipt:"MQ-260823-0151", meter:"11111111111", amt:2000, ch:"Web store", age:"8 min", why:"BPC: meter not registered · refunded" },
+      { st:"FAILED", receipt:"MQ-260823-0098", meter:"94949494949", amt:10000, ch:"POS", age:"42 min", why:"BPC: meter blocked · refunded" }
+    ],
+    channels:{
+      today:{ note:"<b>214 sales</b> today. POS carries the most volume.", cols:[
+        {l:"06",web:2,app:3,pos:4,ussd:2},{l:"08",web:6,app:8,pos:11,ussd:5},{l:"10",web:7,app:9,pos:14,ussd:6},
+        {l:"12",web:9,app:10,pos:16,ussd:8},{l:"14",web:6,app:8,pos:12,ussd:7},{l:"16",web:8,app:11,pos:15,ussd:9},{l:"18",web:4,app:6,pos:9,ussd:5}]},
+      d7:{ note:"<b>1,486 sales</b> in 7 days. Saturday is the peak.", cols:[
+        {l:"Mon",web:30,app:44,pos:70,ussd:38},{l:"Tue",web:28,app:40,pos:66,ussd:35},{l:"Wed",web:31,app:46,pos:72,ussd:40},
+        {l:"Thu",web:29,app:42,pos:69,ussd:37},{l:"Fri",web:36,app:52,pos:81,ussd:44},{l:"Sat",web:41,app:60,pos:92,ussd:50},{l:"Sun",web:22,app:31,pos:48,ussd:27}]},
+      d30:{ note:"<b>6,120 sales</b> in 30 days. Month-end pay week is the busiest.", cols:[
+        {l:"Wk 1",web:120,app:170,pos:280,ussd:150},{l:"Wk 2",web:130,app:180,pos:300,ussd:160},
+        {l:"Wk 3",web:140,app:190,pos:310,ussd:170},{l:"Wk 4",web:190,app:260,pos:410,ussd:230}]}
+    },
+    workers:[ {id:"T1",q:1,state:"Sending"}, {id:"T2",q:0,state:"Idle"}, {id:"T3",q:1,state:"Recovering"}, {id:"T4",q:0,state:"Idle"} ],
+    districts:[ {n:"Gaborone · South East", s:"Live"}, {n:"Molepolole · Kweneng", s:"Planned"}, {n:"Serowe · Central", s:"Planned"}, {n:"Ghanzi", s:"Planned"} ],
+    audit:[
+      { t:"10:41", a:"system", w:"Sale MQ-…0187 held: recovering with last response" },
+      { t:"10:12", a:"admin2", w:"Approved setting rate_per_s 4 → 5 (two-person)" },
+      { t:"09:58", a:"admin1", w:"Requested setting rate_per_s 4 → 5" },
+      { t:"06:00", a:"system", w:"Daily reconciliation with BPC: 0 differences" }
+    ],
+    ledger:[
+      { t:"10:41", w:"Held for MQ-…0187", v:-5000 },
+      { t:"10:40", w:"Settled MQ-…0186", v:-2500 },
+      { t:"09:02", w:"Refunded MQ-…0151", v:2000 },
+      { t:"07:30", w:"Deposit to BPC float", v:10000000 }
+    ]
+  };
+
+  /* ---------- helpers ---------- */
+  function $(id){ return document.getElementById(id); }
+  function money(t){ return (t/100).toLocaleString("en-BW",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  var ICON = {
+    good:'<path d="M20 6 9 17l-5-5"/>', bad:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    warn:'<path d="M12 8v4"/><path d="M12 16h.01"/><circle cx="12" cy="12" r="10"/>',
+    info:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>', mute:'<path d="M5 12h14"/>'
+  };
+  var LABEL = { SUCCEEDED:"Token issued", SUBMITTED:"With BPC", RESERVED:"Queued", UNKNOWN:"Recovering",
+                MANUAL_REVIEW:"Manual review", FAILED:"Failed · refunded", EXPIRED:"Quote expired" };
+  function chip(tone, text){
+    return '<span class="chip c-' + tone + '"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">' + ICON[tone] + '</svg>' + text + '</span>';
+  }
+  function get(path){ return path.split(".").reduce(function(o,k){ return o[k]; }, D); }
+
+  /* ---------- KPIs + strip ---------- */
+  document.querySelectorAll("[data-money]").forEach(function(el){ el.textContent = money(get(el.getAttribute("data-money"))); });
+  var pct = Math.round(D.float.available / D.float.lastDeposit * 100);
+  $("floatPct").textContent = pct + "%";
+  $("floatAlert").textContent = D.float.alertPct + "%";
+  $("floatMark").style.left = D.float.alertPct + "%";
+  $("todayCount").textContent = D.today.count;
+  $("okRate").textContent = (D.today.succeeded / (D.today.succeeded + D.today.failed) * 100).toFixed(1) + "%";
+  $("issued").textContent = D.today.issued; $("succ").textContent = D.today.succeeded;
+  var st = {}; D.states.forEach(function(s){ st[s.k] = s.n; });
+  $("inflight").textContent = st.SUBMITTED + st.RESERVED;
+  $("inflightOld").textContent = D.inflightOld;
+  var exc = st.UNKNOWN + st.MANUAL_REVIEW + st.FAILED;
+  $("excNum").textContent = exc; $("excCount").textContent = exc; $("navExc").textContent = exc;
+  $("excUnknown").textContent = st.UNKNOWN; $("excReview").textContent = st.MANUAL_REVIEW; $("excFailed").textContent = st.FAILED;
+  $("excChip").innerHTML = st.MANUAL_REVIEW > 0 ? chip("bad","Action needed") : (exc ? chip("warn","Being handled") : chip("good","None"));
+  $("excChip").style.marginLeft = "auto";
+  if(st.MANUAL_REVIEW > 0) $("excCard").classList.add("alert");
+
+  /* ---------- funnel ---------- */
+  var max = Math.max.apply(null, D.states.map(function(s){ return s.n; }));
+  var TONE = { good:"var(--good)", info:"var(--blue)", warn:"var(--yellow)", bad:"var(--bad)", mute:"var(--text-3)" };
+  $("funnel").innerHTML = D.states.map(function(s){
+    return '<div class="fn' + (s.side ? " branch" : "") + '" title="' + s.k + '"><span>' + LABEL[s.k] + '</span>'
+      + '<div class="bar2"><i data-w="' + (s.n ? Math.max(s.n / max * 100, 3) : 0) + '" style="background:' + TONE[s.tone] + '"></i></div><b class="tab">' + s.n + '</b></div>';
+  }).join("");
+
+  /* ---------- attention ---------- */
+  var TONE_OF = { UNKNOWN:"warn", MANUAL_REVIEW:"bad", FAILED:"mute" };
+  $("attention").innerHTML = D.attention.length ? D.attention.map(function(a){
+    return '<a href="#" class="row" style="color:inherit;text-decoration:none"><div class="txt"><b>' + a.receipt + ' · P' + money(a.amt) + '</b><small>' + a.ch + ' · meter ' + a.meter + ' · ' + a.why + '</small></div>'
+      + '<div class="meta"><span class="age">' + a.age + '</span>' + chip(TONE_OF[a.st] || "info", LABEL[a.st]) + '</div></a>';
+  }).join("") : '<div class="empty">' + chip("good","All clear") + 'No sale needs attention.</div>';
+
+  /* ---------- workers ---------- */
+  var WTONE = { Idle:"mute", Sending:"info", Recovering:"warn" };
+  $("workers").innerHTML = D.workers.map(function(w){
+    return '<span class="id">' + w.id + '</span><div class="meter"><i class="' + (w.q ? "blue" : "ink") + '" data-w="' + (w.q ? 100 : 4) + '"></i></div>' + chip(WTONE[w.state], w.state);
+  }).join("");
+
+  $("districts").innerHTML = D.districts.map(function(d){
+    return '<div><span>' + d.n + '</span>' + chip(d.s === "Live" ? "good" : "mute", d.s) + '</div>';
+  }).join("");
+  $("audit").innerHTML = D.audit.map(function(a){
+    return '<div class="row"><div class="ic k"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg></div><div class="txt"><b>' + a.w + '</b><small>' + a.t + ' · ' + a.a + '</small></div></div>';
+  }).join("");
+  $("ledger").innerHTML = D.ledger.map(function(l){
+    var up = l.v > 0;
+    return '<div class="row"><div class="ic ' + (up ? "b" : "k") + '"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + (up ? '<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>' : '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>') + '</svg></div><div class="txt"><b>' + l.w + '</b><small>' + l.t + '</small></div><b class="tab" style="margin-left:auto;font-family:\'Sora\'">' + (up ? "+" : "−") + 'P' + money(Math.abs(l.v)) + '</b></div>';
+  }).join("");
+
+  /* ---------- channel chart ---------- */
+  var KEYS = ["web","app","pos","ussd"];
+  function renderChart(key){
+    var set = D.channels[key], top = 0;
+    set.cols.forEach(function(c){ var t = KEYS.reduce(function(s,k){ return s + c[k]; }, 0); c._t = t; if(t > top) top = t; });
+    $("chartSub").innerHTML = set.note;
+    $("chart").classList.toggle("dense", set.cols.length > 8);
+    $("chart").innerHTML = set.cols.map(function(c, i){
+      var segs = KEYS.map(function(k){ return '<b class="k-' + k + '" style="height:' + (c[k] / c._t * 100) + '%" title="' + k.toUpperCase() + ' ' + c[k] + '"></b>'; }).join("");
+      return '<div class="col"><div class="track"><div class="bar stack" data-h="' + Math.round(c._t / top * 100) + '" style="--d:' + (i * .05).toFixed(2) + 's">' + segs
+        + '<span class="tip">' + c._t + ' sales</span></div></div><span>' + c.l + '</span></div>';
+    }).join("");
+    $("chart").setAttribute("aria-label", "Sales by channel, " + key + ": " + set.cols.map(function(c){ return c.l + " " + c._t; }).join(", "));
+    var bars = $("chart").querySelectorAll(".bar");
+    function grow(){ bars.forEach(function(b){ b.style.height = b.getAttribute("data-h") + "%"; }); }
+    reduce ? grow() : requestAnimationFrame(function(){ requestAnimationFrame(grow); });
+  }
+  $("seg").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return;
+    $("seg").querySelectorAll("button").forEach(function(x){ x.classList.remove("on"); x.setAttribute("aria-selected","false"); });
+    b.classList.add("on"); b.setAttribute("aria-selected","true");
+    renderChart(b.getAttribute("data-range"));
+  });
+
+  /* ---------- reveal: one short fade, no splash ---------- */
+  function boot(){
+    document.body.classList.add("ready");
+    renderChart("today");
+    setTimeout(function(){
+      document.querySelectorAll("[data-w]").forEach(function(el){ el.style.width = el.getAttribute("data-w") + "%"; });
+      $("floatBar").style.width = Math.min(pct, 100) + "%";
+    }, reduce ? 0 : 150);
+  }
+
+  /* ---------- freshness ---------- */
+  var loadedAt = Date.now();
+  setInterval(function(){
+    var s = Math.round((Date.now() - loadedAt) / 1000);
+    $("freshTxt").textContent = s < 5 ? "Updated just now" : "Updated " + s + " s ago";
+    $("fresh").classList.toggle("stale", s > 60);
+    if(s > 60) $("freshTxt").textContent = "Stale: last update " + Math.floor(s / 60) + " min ago";
+  }, 1000);
+
+  /* ---------- viewer mode ---------- */
+  $("viewer").addEventListener("click", function(){
+    var on = document.body.classList.toggle("viewer-on");
+    this.setAttribute("aria-pressed", on ? "true" : "false");
+    $("whoName").textContent = on ? "bpc.viewer" : "Operations";
+    $("whoRole").textContent = on ? "BPC · read only" : "Maru Quick · operator";
+  });
+
+  /* ---------- sidebar (from the template) ---------- */
+  var menuBtn = $("menu"), userSet = false;
+  function setRail(on){
+    document.body.classList.toggle("rail", on);
+    menuBtn.setAttribute("aria-expanded", on ? "false" : "true");
+    menuBtn.setAttribute("aria-label", on ? "Expand menu" : "Collapse menu");
+  }
+  menuBtn.addEventListener("click", function(){ userSet = true; setRail(!document.body.classList.contains("rail")); });
+  $("topmenu").addEventListener("click", function(){ userSet = true; setRail(!document.body.classList.contains("rail")); });
+  $("searchbtn").addEventListener("click", function(){ if(document.body.classList.toggle("searching")) setTimeout(function(){ $("q").focus(); }, 60); });
+  $("backdrop").addEventListener("click", function(){ setRail(true); });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape"){ document.body.classList.remove("searching"); if(window.innerWidth <= 900) setRail(true); }
+    if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"){ e.preventDefault(); $("q").focus(); }
+  });
+  function autoRail(){ if(!userSet) setRail(window.innerWidth <= 1100); }
+  autoRail(); window.addEventListener("resize", autoRail);
+  document.querySelectorAll(".nav a").forEach(function(a){
+    a.addEventListener("click", function(e){
+      e.preventDefault();
+      document.querySelectorAll(".nav a").forEach(function(x){ x.classList.remove("on"); x.removeAttribute("aria-current"); });
+      a.classList.add("on"); a.setAttribute("aria-current","page");
+      if(window.innerWidth <= 900) setRail(true);
+    });
+  });
+
+  /* ---------- theme ---------- */
+  var root = document.documentElement;
+  function setTheme(m){ root.setAttribute("data-theme", m); $("ico-sun").style.display = m === "dark" ? "none" : "block"; $("ico-moon").style.display = m === "dark" ? "block" : "none"; }
+  if(window.matchMedia("(prefers-color-scheme: dark)").matches) setTheme("dark");
+  $("theme").addEventListener("click", function(){ setTheme(root.getAttribute("data-theme") === "dark" ? "light" : "dark"); });
+
+  boot();
+})();
+</script>
+</body>
+</html>
